@@ -16,29 +16,19 @@ class PLCServer:
         self.host = host
         self.port = port
         
-        # 레지스터 초기화 (4개만)
-        # 0: RPM (800)
-        # 1: Ballast Level (50)
-        # 2: Pump Status (1)
-        # 3: Rudder Angle (0, signed로 사용)
         initial_registers = [800, 50, 1, 0]
-        
-        # Coil 초기화 (1개만)
-        # 0: Pump ON/OFF (True)
         initial_coils = [True]
         
-        # Modbus 데이터 저장소
         self.store = ModbusSlaveContext(
-            di=ModbusSequentialDataBlock(0, [0]*10),  # Discrete Inputs
-            co=ModbusSequentialDataBlock(0, initial_coils + [False]*9),  # Coils
-            hr=ModbusSequentialDataBlock(0, initial_registers + [0]*96),  # Holding Registers
-            ir=ModbusSequentialDataBlock(0, [0]*10)  # Input Registers
+            di=ModbusSequentialDataBlock(0, [0]*10),
+            co=ModbusSequentialDataBlock(0, initial_coils + [False]*9),
+            hr=ModbusSequentialDataBlock(0, initial_registers + [0]*96),
+            ir=ModbusSequentialDataBlock(0, [0]*10)
         )
         
         self.context = ModbusServerContext(slaves=self.store, single=True)
         
     def start(self):
-        """PLC 서버 시작"""
         log.info(f"[PLC Server] Starting on {self.host}:{self.port}")
         log.info("[PLC Server] Registers:")
         log.info("  0: RPM (800)")
