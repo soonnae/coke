@@ -9,11 +9,12 @@ import socket
 import json
 from datetime import datetime
 
+TARGET_IP = "192.168.0.100"
+TARGET_PORT = 10111
+
 class AISSimulator:
-    def __init__(self, host='0.0.0.0', port=10111):
-        self.host = host
-        self.port = port
-        self.socket = None
+    def __init__(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
         # 선박 정보
         self.mmsi = 440123456  # Maritime Mobile Service Identity
@@ -34,30 +35,11 @@ class AISSimulator:
         
     def start(self):
         """AIS 시뮬레이터 시작"""
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind((self.host, self.port))
-        self.socket.listen(5)
-        print(f"[AIS Simulator] Started on {self.host}:{self.port}")
+        print(f"[AIS Simulator] Sending to: {TARGET_IP}:{TARGET_PORT}")
         
+        message_count = 0
         while True:
             try:
-                client, addr = self.socket.accept()
-                print(f"[AIS Simulator] Client connected: {addr}")
-                self.handle_client(client)
-            except KeyboardInterrupt:
-                print("\n[AIS Simulator] Shutting down...")
-                break
-            except Exception as e:
-                print(f"[AIS Simulator] Error: {e}")
-                
-        self.socket.close()
-    
-    def handle_client(self, client):
-        """클라이언트에게 AIS 데이터 전송"""
-        try:
-            message_count = 0
-            while True:
                 # AIS 메시지 타입 선택 (Position Report와 Static Data 교대)
                 if message_count % 10 == 0:
                     # 10번에 1번은 Static Data (Type 5)
@@ -67,8 +49,9 @@ class AISSimulator:
                     ais_data = self.generate_position_report()
                 
                 # JSON 형식으로 전송
-                message = json.dumps(ais_data) + '\n'
-                client.send(message.encode('utf-8'))
+                message = json.dumps(ais_data)
+                self.sock.sendto(message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
+                print(f"[SEND] AIS Type {ais_data['message_type']}: MMSI={self.mmsi}")
                 
                 # 위치 업데이트
                 self.update_position()
@@ -76,12 +59,11 @@ class AISSimulator:
                 message_count += 1
                 time.sleep(5)  # 5초마다 전송
                 
-        except (ConnectionResetError, BrokenPipeError):
-            print("[AIS Simulator] Client disconnected")
-        except Exception as e:
-            print(f"[AIS Simulator] Error handling client: {e}")
-        finally:
-            client.close()
+            except KeyboardInterrupt:
+                print("\n[AIS Simulator] Shutting down...")
+                break
+            except Exception as e:
+                print(f"[AIS Simulator] Error: {e}")
     
     def generate_position_report(self):
         """AIS Type 1 Position Report 생성"""
@@ -150,5 +132,4 @@ class AISSimulator:
         self.heading = self.heading % 360
 
 if __name__ == "__main__":
-    simulator = AISSimulator(host='0.0.0.0', port=10111)
-    simulator.start()
+    AISSimulator().start()

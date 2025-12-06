@@ -9,11 +9,12 @@ import socket
 import json
 from datetime import datetime
 
+TARGET_IP = "192.168.0.100"
+TARGET_PORT = 10112
+
 class SensorSimulator:
-    def __init__(self, host='0.0.0.0', port=10112):
-        self.host = host
-        self.port = port
-        self.socket = None
+    def __init__(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
         # 엔진 센서 (메인 엔진)
         self.engine_rpm = 850.0
@@ -40,47 +41,28 @@ class SensorSimulator:
         
     def start(self):
         """센서 시뮬레이터 시작"""
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind((self.host, self.port))
-        self.socket.listen(5)
-        print(f"[Sensor Simulator] Started on {self.host}:{self.port}")
+        print(f"[Sensor Simulator] Sending to: {TARGET_IP}:{TARGET_PORT}")
         
         while True:
             try:
-                client, addr = self.socket.accept()
-                print(f"[Sensor Simulator] Client connected: {addr}")
-                self.handle_client(client)
-            except KeyboardInterrupt:
-                print("\n[Sensor Simulator] Shutting down...")
-                break
-            except Exception as e:
-                print(f"[Sensor Simulator] Error: {e}")
-                
-        self.socket.close()
-    
-    def handle_client(self, client):
-        """클라이언트에게 센서 데이터 전송"""
-        try:
-            while True:
                 # 센서 데이터 생성
                 sensor_data = self.generate_sensor_data()
                 
                 # JSON 형식으로 전송
-                message = json.dumps(sensor_data, indent=2) + '\n'
-                client.send(message.encode('utf-8'))
+                message = json.dumps(sensor_data)
+                self.sock.sendto(message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
+                print(f"[SEND] Engine RPM={sensor_data['engine']['rpm']}, Temp={sensor_data['engine']['temperature']}")
                 
                 # 센서 값 업데이트
                 self.update_sensors()
                 
                 time.sleep(2)  # 2초마다 전송
                 
-        except (ConnectionResetError, BrokenPipeError):
-            print("[Sensor Simulator] Client disconnected")
-        except Exception as e:
-            print(f"[Sensor Simulator] Error handling client: {e}")
-        finally:
-            client.close()
+            except KeyboardInterrupt:
+                print("\n[Sensor Simulator] Shutting down...")
+                break
+            except Exception as e:
+                print(f"[Sensor Simulator] Error: {e}")
     
     def generate_sensor_data(self):
         """센서 데이터 생성"""
@@ -205,5 +187,4 @@ class SensorSimulator:
             })
 
 if __name__ == "__main__":
-    simulator = SensorSimulator(host='0.0.0.0', port=10112)
-    simulator.start()
+    SensorSimulator().start()

@@ -1,204 +1,134 @@
 """
 NMEA Multiplexer
-여러 소스의 NMEA 데이터를 수집하고 통합하여 재전송
+여러 소스의 UDP 데이터를 수신하고 통합하여 RouterOS로 재전송
 """
 
 import socket
 import threading
 import time
-import queue
 from datetime import datetime
 
+TARGET_IP = "192.168.0.100"
+TARGET_PORT = 10113
+
 class NMEAMultiplexer:
-    def __init__(self, output_host='0.0.0.0', output_port=10113):
-        self.output_host = output_host
-        self.output_port = output_port
-        self.output_socket = None
+    def __init__(self):
+        # UDP 수신 소켓들 (각 센서로부터)
+        self.gps_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.ais_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sensor_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
-        # 입력 소스 설정
-        self.input_sources = [
-            {'name': 'GPS', 'host': 'localhost', 'port': 10110},
-            {'name': 'AIS', 'host': 'localhost', 'port': 10111},
-            {'name': 'Sensor', 'host': 'localhost', 'port': 10112}
-        ]
+        # UDP 송신 소켓 (RouterOS로)
+        self.send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
-        # 데이터 큐
-        self.data_queue = queue.Queue()
-        
-        # 클라이언트 목록
-        self.clients = []
-        self.clients_lock = threading.Lock()
+        # 각 센서 포트 바인딩
+        self.gps_sock.bind(('0.0.0.0', 10110))
+        self.ais_sock.bind(('0.0.0.0', 10111))
+        self.sensor_sock.bind(('0.0.0.0', 10112))
         
         # 통계
         self.stats = {
-            'messages_received': 0,
-            'messages_sent': 0,
-            'clients_connected': 0
+            'gps_received': 0,
+            'ais_received': 0,
+            'sensor_received': 0,
+            'messages_sent': 0
         }
+        
+        self.running = True
         
     def start(self):
         """멀티플렉서 시작"""
-        print("[NMEA Multiplexer] Starting...")
+        print("[NMEA Multiplexer] Starting UDP listeners...")
+        print(f"[NMEA Multiplexer] GPS: 0.0.0.0:10110")
+        print(f"[NMEA Multiplexer] AIS: 0.0.0.0:10111")
+        print(f"[NMEA Multiplexer] Sensor: 0.0.0.0:10112")
+        print(f"[NMEA Multiplexer] Forwarding to: {TARGET_IP}:{TARGET_PORT}")
         
-        # 출력 서버 시작
-        output_thread = threading.Thread(target=self.start_output_server, daemon=True)
-        output_thread.start()
-        
-        # 입력 소스 연결
-        for source in self.input_sources:
-            thread = threading.Thread(
-                target=self.connect_to_source,
-                args=(source,),
-                daemon=True
-            )
-            thread.start()
-        
-        # 데이터 배포 스레드
-        distribute_thread = threading.Thread(target=self.distribute_data, daemon=True)
-        distribute_thread.start()
+        # 각 센서 데이터 수신 스레드
+        threading.Thread(target=self.receive_gps, daemon=True).start()
+        threading.Thread(target=self.receive_ais, daemon=True).start()
+        threading.Thread(target=self.receive_sensor, daemon=True).start()
         
         # 통계 출력 스레드
-        stats_thread = threading.Thread(target=self.print_stats, daemon=True)
-        stats_thread.start()
+        threading.Thread(target=self.print_stats, daemon=True).start()
         
         # 메인 루프
         try:
-            while True:
+            while self.running:
                 time.sleep(1)
         except KeyboardInterrupt:
             print("\n[NMEA Multiplexer] Shutting down...")
-            self.shutdown()
+            self.running = False
     
-    def start_output_server(self):
-        """출력 서버 시작 (클라이언트가 연결)"""
-        self.output_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.output_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.output_socket.bind((self.output_host, self.output_port))
-        self.output_socket.listen(10)
-        print(f"[NMEA Multiplexer] Output server started on {self.output_host}:{self.output_port}")
-        
-        while True:
+    def receive_gps(self):
+        """GPS 데이터 수신 및 포워딩"""
+        print("[NMEA Multiplexer] GPS listener started")
+        while self.running:
             try:
-                client_socket, addr = self.output_socket.accept()
-                print(f"[NMEA Multiplexer] Client connected: {addr}")
+                data, addr = self.gps_sock.recvfrom(4096)
+                message = data.decode('utf-8').strip()
                 
-                with self.clients_lock:
-                    self.clients.append({
-                        'socket': client_socket,
-                        'address': addr,
-                        'connected_at': datetime.now()
-                    })
-                    self.stats['clients_connected'] = len(self.clients)
-                    
+                # RouterOS로 포워딩
+                self.forward_message("GPS", message)
+                self.stats['gps_received'] += 1
+                
             except Exception as e:
-                print(f"[NMEA Multiplexer] Error accepting client: {e}")
-                break
+                if self.running:
+                    print(f"[NMEA Multiplexer] GPS error: {e}")
     
-    def connect_to_source(self, source):
-        """입력 소스에 연결"""
-        retry_delay = 5
-        
-        while True:
+    def receive_ais(self):
+        """AIS 데이터 수신 및 포워딩"""
+        print("[NMEA Multiplexer] AIS listener started")
+        while self.running:
             try:
-                print(f"[NMEA Multiplexer] Connecting to {source['name']} ({source['host']}:{source['port']})")
+                data, addr = self.ais_sock.recvfrom(4096)
+                message = data.decode('utf-8').strip()
                 
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.connect((source['host'], source['port']))
+                # RouterOS로 포워딩
+                self.forward_message("AIS", message)
+                self.stats['ais_received'] += 1
                 
-                print(f"[NMEA Multiplexer] Connected to {source['name']}")
-                
-                # 데이터 수신
-                buffer = ""
-                while True:
-                    data = sock.recv(4096).decode('utf-8')
-                    if not data:
-                        break
-                    
-                    buffer += data
-                    
-                    # 줄 단위로 처리
-                    while '\n' in buffer:
-                        line, buffer = buffer.split('\n', 1)
-                        line = line.strip()
-                        
-                        if line:
-                            # 소스 정보와 함께 큐에 추가
-                            self.data_queue.put({
-                                'source': source['name'],
-                                'data': line,
-                                'timestamp': datetime.now()
-                            })
-                            self.stats['messages_received'] += 1
-                
-                print(f"[NMEA Multiplexer] Disconnected from {source['name']}")
-                sock.close()
-                
-            except ConnectionRefusedError:
-                print(f"[NMEA Multiplexer] Cannot connect to {source['name']}, retrying in {retry_delay}s...")
             except Exception as e:
-                print(f"[NMEA Multiplexer] Error with {source['name']}: {e}")
+                if self.running:
+                    print(f"[NMEA Multiplexer] AIS error: {e}")
+    
+    def receive_sensor(self):
+        """센서 데이터 수신 및 포워딩"""
+        print("[NMEA Multiplexer] Sensor listener started")
+        while self.running:
+            try:
+                data, addr = self.sensor_sock.recvfrom(4096)
+                message = data.decode('utf-8').strip()
+                
+                # RouterOS로 포워딩
+                self.forward_message("SENSOR", message)
+                self.stats['sensor_received'] += 1
+                
+            except Exception as e:
+                if self.running:
+                    print(f"[NMEA Multiplexer] Sensor error: {e}")
+    
+    def forward_message(self, source, message):
+        """메시지를 RouterOS로 포워딩"""
+        try:
+            # 소스 정보를 포함한 메시지 생성
+            tagged_message = f"[{source}] {message}"
+            self.send_sock.sendto(tagged_message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
+            self.stats['messages_sent'] += 1
+            print(f"[FORWARD] {source}: {message[:50]}...")
             
-            time.sleep(retry_delay)
-    
-    def distribute_data(self):
-        """데이터를 연결된 클라이언트에 배포"""
-        while True:
-            try:
-                # 큐에서 데이터 가져오기 (타임아웃 1초)
-                item = self.data_queue.get(timeout=1)
-                
-                # 모든 클라이언트에 전송
-                disconnected_clients = []
-                
-                with self.clients_lock:
-                    for client in self.clients:
-                        try:
-                            # 소스 정보를 포함한 메시지 생성
-                            message = f"[{item['source']}] {item['data']}\n"
-                            client['socket'].send(message.encode('utf-8'))
-                            self.stats['messages_sent'] += 1
-                            
-                        except Exception as e:
-                            print(f"[NMEA Multiplexer] Error sending to {client['address']}: {e}")
-                            disconnected_clients.append(client)
-                    
-                    # 끊어진 클라이언트 제거
-                    for client in disconnected_clients:
-                        print(f"[NMEA Multiplexer] Removing disconnected client: {client['address']}")
-                        try:
-                            client['socket'].close()
-                        except:
-                            pass
-                        self.clients.remove(client)
-                    
-                    self.stats['clients_connected'] = len(self.clients)
-                
-            except queue.Empty:
-                continue
-            except Exception as e:
-                print(f"[NMEA Multiplexer] Error distributing data: {e}")
+        except Exception as e:
+            print(f"[NMEA Multiplexer] Forward error: {e}")
     
     def print_stats(self):
         """주기적으로 통계 출력"""
-        while True:
+        while self.running:
             time.sleep(30)  # 30초마다
             print(f"\n[NMEA Multiplexer] Statistics:")
-            print(f"  Messages Received: {self.stats['messages_received']}")
-            print(f"  Messages Sent: {self.stats['messages_sent']}")
-            print(f"  Connected Clients: {self.stats['clients_connected']}\n")
-    
-    def shutdown(self):
-        """멀티플렉서 종료"""
-        with self.clients_lock:
-            for client in self.clients:
-                try:
-                    client['socket'].close()
-                except:
-                    pass
-        
-        if self.output_socket:
-            self.output_socket.close()
+            print(f"  GPS Received:    {self.stats['gps_received']}")
+            print(f"  AIS Received:    {self.stats['ais_received']}")
+            print(f"  Sensor Received: {self.stats['sensor_received']}")
+            print(f"  Messages Sent:   {self.stats['messages_sent']}\n")
 
 if __name__ == "__main__":
-    multiplexer = NMEAMultiplexer(output_host='0.0.0.0', output_port=10113)
-    multiplexer.start()
+    NMEAMultiplexer().start()
