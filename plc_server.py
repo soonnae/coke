@@ -1,7 +1,8 @@
 """
 PLC Server (Modbus TCP Server)
-Control Zone - Software PLC
-레지스터 4개 + Coil 1개만 유지
+Control Zone - Minimal Software PLC
+Registers: RPM, Ballast, Pump
+Coils: Pump ON/OFF
 """
 
 from pymodbus.server import StartTcpServer
@@ -15,29 +16,36 @@ class PLCServer:
     def __init__(self, host='0.0.0.0', port=502):
         self.host = host
         self.port = port
-        
-        initial_registers = [800, 50, 1, 0]
+
+        # Minimal registers
+        initial_registers = [
+            800,   # 0: RPM
+            50,    # 1: Ballast Level
+            1      # 2: Pump Status (1=ON)
+        ]
+
+        # Coil for Pump ON/OFF
         initial_coils = [True]
-        
+
+        # Create Modbus datastore
         self.store = ModbusSlaveContext(
-            di=ModbusSequentialDataBlock(0, [0]*10),
-            co=ModbusSequentialDataBlock(0, initial_coils + [False]*9),
-            hr=ModbusSequentialDataBlock(0, initial_registers + [0]*96),
-            ir=ModbusSequentialDataBlock(0, [0]*10)
+            di=ModbusSequentialDataBlock(0, [0]*10),                     # Discrete Inputs
+            co=ModbusSequentialDataBlock(0, initial_coils + [False]*9),  # Coils
+            hr=ModbusSequentialDataBlock(0, initial_registers + [0]*97), # Holding Registers
+            ir=ModbusSequentialDataBlock(0, [0]*10)                      # Input Registers
         )
-        
+
         self.context = ModbusServerContext(slaves=self.store, single=True)
-        
+
     def start(self):
         log.info(f"[PLC Server] Starting on {self.host}:{self.port}")
-        log.info("[PLC Server] Registers:")
+        log.info("[PLC Server] Holding Registers:")
         log.info("  0: RPM (800)")
         log.info("  1: Ballast Level (50)")
         log.info("  2: Pump Status (1)")
-        log.info("  3: Rudder Angle (0)")
         log.info("[PLC Server] Coils:")
         log.info("  0: Pump ON/OFF (True)")
-        
+
         try:
             StartTcpServer(
                 context=self.context,
