@@ -4,7 +4,7 @@ Control Zone - Engine Telemetry Module
 RPM, Ballast, Pump, Rudder만 간단히 변화
 """
 
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client.sync import ModbusTcpClient
 import time
 import logging
 
@@ -17,23 +17,23 @@ class EngineLogic:
         self.plc_port = plc_port
         self.client = None
         
+        # 초기값
         self.rpm = 800
         self.ballast = 50
         self.pump_status = 1
         self.rudder = 0
         
+        # 순환 패턴
         self.rpm_target = [800, 1000, 1200, 900]
-        self.rpm_index = 0
-        
         self.ballast_target = [40, 45, 50, 45]
-        self.ballast_index = 0
-        
         self.rudder_target = [-5, 0, 5, 0]
+
+        self.rpm_index = 0
+        self.ballast_index = 0
         self.rudder_index = 0
         
-        self.pump_toggle_count = 0
-        
     def connect(self):
+        """PLC 서버 연결"""
         try:
             self.client = ModbusTcpClient(self.plc_host, port=self.plc_port)
             if self.client.connect():
@@ -51,6 +51,7 @@ class EngineLogic:
             self.client.close()
     
     def run(self):
+        """메인 루프"""
         if not self.connect():
             return
         
@@ -70,34 +71,37 @@ class EngineLogic:
             self.disconnect()
     
     def update_values(self, iteration):
+        """값 업데이트"""
         if iteration % 5 == 0:
             self.rpm = self.rpm_target[self.rpm_index]
             self.rpm_index = (self.rpm_index + 1) % len(self.rpm_target)
-        
-        if iteration % 5 == 0:
+            
             self.ballast = self.ballast_target[self.ballast_index]
             self.ballast_index = (self.ballast_index + 1) % len(self.ballast_target)
-        
-        if iteration % 5 == 0:
-            self.pump_status = 1 - self.pump_status
-            self.pump_toggle_count += 1
-        
-        if iteration % 5 == 0:
+            
+            self.pump_status = 1 - self.pump_status  # ON/OFF toggle
+            
             self.rudder = self.rudder_target[self.rudder_index]
             self.rudder_index = (self.rudder_index + 1) % len(self.rudder_target)
     
     def write_to_plc(self):
+        """PLC에 값 쓰기 (안정 버전)"""
         try:
-            values = [
-                int(self.rpm),
-                int(self.ballast),
-                int(self.pump_status),
-                int(self.rudder)
-            ]
-            self.client.write_registers(0, values)
+            # Holding Registers 개별 쓰기
+            self.client.write_register(0, int(self.rpm))
+            self.client.write_register(1, int(self.ballast))
+            self.client.write_register(2, int(self.pump_status))
+            self.client.write_register(3, int(self.rudder))
+
+            # Coil 쓰기
             self.client.write_coil(0, bool(self.pump_status))
-            
-            log.info(f"[Engine Logic] RPM={self.rpm}, Ballast={self.ballast}, Pump={'ON' if self.pump_status else 'OFF'}, Rudder={self.rudder}")
+
+            log.info(
+                f"[Engine Logic] RPM={self.rpm}, "
+                f"Ballast={self.ballast}, "
+                f"Pump={'ON' if self.pump_status else 'OFF'}, "
+                f"Rudder={self.rudder}"
+            )
             
         except Exception as e:
             log.error(f"[Engine Logic] Write error: {e}")
