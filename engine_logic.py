@@ -1,7 +1,7 @@
 """
 Engine Logic Controller
 Control Zone - Engine Telemetry Module
-RPM, Ballast, Pump, Rudder만 간단히 변화
+RPM, Ballast, Pump만 간단히 변화
 """
 
 from pymodbus.client.sync import ModbusTcpClient
