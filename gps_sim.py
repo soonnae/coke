@@ -4,7 +4,7 @@ import socket
 import math
 from datetime import datetime
 
-TARGET_IP = "192.168.0.165"   # RouterOS WAN IP
+TARGET_IP = "10.10.10.10"   # Bridge Zone
 TARGET_PORT = 10110
 
 class GPSSimulator:

@@ -8,7 +8,7 @@ import threading
 import time
 from datetime import datetime
 
-TARGET_IP = "192.168.0.100"
+TARGET_IP = "10.10.10.10"
 TARGET_PORT = 10113
 
 class NMEAMultiplexer:
