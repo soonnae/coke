@@ -17,7 +17,7 @@ class AISSimulator:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
         # 선박 정보
-        self.mmsi = 440123456  # Maritime Mobile Service Identity
+        self.mmsi = random.randint(440000000, 440999999)  # Maritime Mobile Service Identity (랜덤)
         self.ship_name = "COKE_VESSEL"
         self.call_sign = "DTAB"
         self.imo = 9876543
@@ -51,7 +51,7 @@ class AISSimulator:
                 # JSON 형식으로 전송
                 message = json.dumps(ais_data)
                 self.sock.sendto(message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
-                print(f"[SEND] AIS Type {ais_data['message_type']}: MMSI={self.mmsi}")
+                print(f"[SEND] {json.dumps(ais_data, indent=2)}")
                 
                 # 위치 업데이트
                 self.update_position()
