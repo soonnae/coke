@@ -67,6 +67,7 @@ class NMEAMultiplexer:
             try:
                 data, addr = self.gps_sock.recvfrom(4096)
                 message = data.decode('utf-8').strip()
+                print(f"[RECEIVE] GPS: {message}")
                 
                 # RouterOS로 포워딩
                 self.forward_message("GPS", message)
@@ -83,6 +84,7 @@ class NMEAMultiplexer:
             try:
                 data, addr = self.ais_sock.recvfrom(4096)
                 message = data.decode('utf-8').strip()
+                print(f"[RECEIVE] AIS: {message}")
                 
                 # RouterOS로 포워딩
                 self.forward_message("AIS", message)
@@ -99,6 +101,7 @@ class NMEAMultiplexer:
             try:
                 data, addr = self.sensor_sock.recvfrom(4096)
                 message = data.decode('utf-8').strip()
+                print(f"[RECEIVE] SENSOR: {message}")
                 
                 # RouterOS로 포워딩
                 self.forward_message("SENSOR", message)
@@ -115,7 +118,7 @@ class NMEAMultiplexer:
             tagged_message = f"[{source}] {message}"
             self.send_sock.sendto(tagged_message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
             self.stats['messages_sent'] += 1
-            print(f"[FORWARD] {source}: {message[:50]}...")
+            print(f"[FORWARD] {tagged_message}")
             
         except Exception as e:
             print(f"[NMEA Multiplexer] Forward error: {e}")

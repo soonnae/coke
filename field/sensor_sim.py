@@ -51,7 +51,7 @@ class SensorSimulator:
                 # JSON 형식으로 전송
                 message = json.dumps(sensor_data)
                 self.sock.sendto(message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
-                print(f"[SEND] Engine RPM={sensor_data['engine']['rpm']}, Temp={sensor_data['engine']['temperature']}")
+                print(f"[SEND] {json.dumps(sensor_data, indent=2)}")
                 
                 # 센서 값 업데이트
                 self.update_sensors()
