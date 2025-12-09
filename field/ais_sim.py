@@ -27,7 +27,7 @@ class AISSimulator:
         self.width = 32       # meters
 
         # 위치 정보 (GPS랑 비슷한 해역으로 설정)
-        self.latitude = 35.1028
+        self.latitude = 35.1128
         self.longitude = 129.0403
         self.speed = 10.0     # knots
         self.course = 90.0    # degrees
@@ -168,23 +168,8 @@ class AISSimulator:
             111320.0 * math.cos(math.radians(self.latitude))
         )
 
-        new_lat = self.latitude + delta_lat
-        new_lon = self.longitude + delta_lon
-
-        # -------------------------
-        # 🔥 추가된 부분: 바다 경계 벗어나면 즉시 유턴
-        #   부산항 바다 대략 범위:
-        #   lat 35.05 ~ 35.20
-        #   lon 129.00 ~ 129.20
-        # -------------------------
-        if not (35.05 <= new_lat <= 35.20) or not (129.00 <= new_lon <= 129.20):
-            # 방향 180도 회전 (유턴)
-            self.course = (self.course + 180) % 360
-            return  # 이번 tick에서는 움직이지 않고 방향만 전환
-
-        # 정상 범위면 위치 반영
-        self.latitude = new_lat
-        self.longitude = new_lon
+        self.latitude += delta_lat
+        self.longitude += delta_lon
 
         # 약간 랜덤 흔들림
         self.latitude += random.uniform(-0.00001, 0.00001)
