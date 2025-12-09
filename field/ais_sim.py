@@ -9,7 +9,7 @@ import socket
 import json
 from datetime import datetime
 
-TARGET_IP = "10.10.10.10"
+TARGET_IP = "10.10.20.10"
 TARGET_PORT = 10111
 
 class AISSimulator:

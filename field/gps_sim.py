@@ -4,7 +4,7 @@ import socket
 import math
 from datetime import datetime
 
-TARGET_IP = "10.10.10.10"   # Bridge Zone
+TARGET_IP = "10.10.20.10"   # Bridge Zone
 TARGET_PORT = 10110
 
 class GPSSimulator:

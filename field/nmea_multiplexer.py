@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 
 TARGET_IP = "10.10.10.10"
-TARGET_PORT = 10113
+TARGET_PORT = 10110
 
 class NMEAMultiplexer:
     def __init__(self):
