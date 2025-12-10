@@ -18,7 +18,7 @@ class AISSimulator:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         # 선박 정보
-        self.mmsi = random.randint(440000000, 440999999)  # 한국 MMSI 대역 랜덤
+        self.mmsi = 440123456  # 고정 MMSI (한국 선박)
         self.ship_name = "COKE_VESSEL"
         self.call_sign = "DTAB"
         self.imo = 9876543
@@ -26,12 +26,13 @@ class AISSimulator:
         self.length = 200     # meters
         self.width = 32       # meters
 
-        # 위치 정보 (GPS랑 비슷한 해역으로 설정)
-        self.latitude = 35.1128
-        self.longitude = 129.0403
+        # 위치 정보: 사용자 지정 좌표 (35°05'33.893"N, 129°07'10.0"E)
+        # 다른 선박 시뮬레이션 - GPS와 다른 위치/방향
+        self.latitude = 35.09275   # GPS보다 남쪽
+        self.longitude = 129.11944  # GPS보다 약간 동쪽
         self.speed = 10.0     # knots
-        self.course = 90.0    # degrees
-        self.heading = 90     # degrees
+        self.course = 180.0   # 남쪽 (South)
+        self.heading = 180    # degrees
         self.nav_status = 0   # Under way using engine
 
     # ---------------------------
@@ -156,36 +157,55 @@ class AISSimulator:
     # ---------------------------
 
     def update_position(self):
-        """선박 위치 업데이트 (5초 간 이동량 기준)"""
+        """
+        선박 위치 업데이트 (5초 간 이동량 기준)
+        다른 선박 시뮬레이션 - GPS와 독립적인 항로
+        """
         time_delta = 5.0
         speed_ms = self.speed * 0.514444  # knots → m/s
         distance = speed_ms * time_delta
 
         course_rad = math.radians(self.course)
 
+        # 위도/경도 변화 계산
         delta_lat = distance * math.cos(course_rad) / 111320.0
         delta_lon = distance * math.sin(course_rad) / (
             111320.0 * math.cos(math.radians(self.latitude))
         )
 
-        self.latitude += delta_lat
-        self.longitude += delta_lon
+        new_lat = self.latitude + delta_lat
+        new_lon = self.longitude + delta_lon
 
-        # 약간 랜덤 흔들림
-        self.latitude += random.uniform(-0.00001, 0.00001)
-        self.longitude += random.uniform(-0.00001, 0.00001)
-        self.course += random.uniform(-2, 2)
-        self.heading = int(self.course + random.uniform(-5, 5))
-        self.speed += random.uniform(-0.5, 0.5)
+        # 육지 경계 체크 (35.05~35.20N, 129.05~129.20E 범위 내 유지)
+        if not (35.05 <= new_lat <= 35.20 and 129.05 <= new_lon <= 129.20):
+            # 경계 밖이면 180도 유턴
+            self.course = (self.course + 180) % 360
+            self.heading = int(self.course)
+            print(f"[AIS] Boundary reached, turning around to {self.course}°")
+            return
+
+        self.latitude = new_lat
+        self.longitude = new_lon
+
+        # 현실적인 수준의 랜덤 흔들림 (GPS 오차, 해류, 바람 등)
+        self.latitude += random.uniform(-0.000005, 0.000005)   # ±0.5m 정도
+        self.longitude += random.uniform(-0.000005, 0.000005)
+        self.course += random.uniform(-0.5, 0.5)   # ±0.5도
+        self.heading = int(self.course + random.uniform(-1, 1))  # ±1도
+        self.speed += random.uniform(-0.2, 0.2)    # ±0.2 knots
 
         # 범위 제한
-        self.speed = max(0, min(25, self.speed))
+        self.speed = max(8.0, min(12.0, self.speed))  # 10 knots ±2 범위 유지
         self.course = self.course % 360
         self.heading = self.heading % 360
 
     def start(self):
         print(f"[AIS Simulator] Sending AIS NMEA to {TARGET_IP}:{TARGET_PORT}")
-        print(f"[AIS Simulator] MMSI={self.mmsi}")
+        print(f"[AIS Simulator] MMSI: {self.mmsi}")
+        print(f"[AIS Simulator] Ship Name: {self.ship_name}")
+        print(f"[AIS Simulator] Starting position: {self.latitude:.5f}N, {self.longitude:.5f}E")
+        print(f"[AIS Simulator] Course: {self.course}°, Speed: {self.speed} knots")
+        print(f"[AIS Simulator] (Different vessel - independent from GPS)")
         while True:
             try:
                 sentence = self.generate_ais_nmea()
