@@ -11,11 +11,11 @@ class GPSSimulator:
     def __init__(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        # 초기 위치: 부산 남동쪽 바다 (안전한 해역)
-        self.latitude = 35.0000
-        self.longitude = 129.1500
+        # 초기 위치: 사용자 지정 좌표 (35°06'39.022"N, 129°07'08.2"E)
+        self.latitude = 35.11084
+        self.longitude = 129.11894
         self.speed = 10.0  # knots
-        self.course = 45.0  # 북동쪽 (바다 방향)
+        self.course = 90.0  # 동쪽 (East)
         self.altitude = 0.0
 
     def start(self):
