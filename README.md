@@ -35,28 +35,34 @@
    - Prometheus 형식으로 메트릭 내보내기
    - 모니터링 및 시각화 지원
 
-### Attacker VM (담당자 C) - 2개
-8. **modbus_flood.py** - Modbus 플러딩 공격
+### Attacker VM - 3개
+8. **arp_mitm_attack.py** - ARP MITM 공격 ⭐ NEW
+   - Layer 2 네트워크 공격
+   - Field ↔ Bridge 간 통신 경로 탈취
+   - 공격 모드: Black Hole, Delay, Forward, Sniff
+   - 데이터가 아닌 "통신 경로 자체" 공격
+
+9. **modbus_flood.py** - Modbus 플러딩 공격
    - Modbus TCP 프로토콜 플러딩 공격
    - 다중 스레드 공격 시뮬레이션
 
-9. **sensor_replay.py** - 센서 재전송 공격
-   - Man-in-the-Middle 공격
-   - 패킷 캡처 및 재생
+10. **sensor_replay.py** - 센서 재전송 공격
+    - Man-in-the-Middle 공격
+    - 패킷 캡처 및 재생
 
 ### 옵션 - 2개
-10. **gps_jump_attack.py** - GPS 점프 공격
+11. **gps_jump_attack.py** - GPS 점프 공격
     - GPS 좌표 급격한 변경 공격
     - 랜덤 점프, 고정 위치, 드리프트 모드
 
-11. **coil_single_attack.py** - Coil 제어 공격
+12. **coil_single_attack.py** - Coil 제어 공격
     - Modbus Coil 단일 제어 공격
     - 비상 정지, 엔진 정지, 빠른 토글 공격
 
 ## 필요한 Python 패키지
 
 ```bash
-pip install pymodbus prometheus-client
+pip install pymodbus prometheus-client scapy netifaces
 ```
 
 ## 실행 방법
@@ -83,6 +89,43 @@ python plc_exporter.py
 ```
 
 ### 공격 시뮬레이션
+
+#### ARP MITM 공격 (Network Layer - L2) ⭐ NEW
+```bash
+# Black Hole 모드 - 통신 완전 차단
+sudo python3 attacker/arp_mitm_attack.py \
+  --target1 10.10.20.10 \
+  --target2 10.10.10.10 \
+  --mode blackhole
+
+# Delay 모드 - 패킷 2초 지연
+sudo python3 attacker/arp_mitm_attack.py \
+  --target1 10.10.20.10 \
+  --target2 10.10.10.10 \
+  --mode delay \
+  --delay 2.0
+
+# Sniff 모드 - NMEA 데이터 캡처
+sudo python3 attacker/arp_mitm_attack.py \
+  --target1 10.10.20.10 \
+  --target2 10.10.10.10 \
+  --mode sniff
+
+# Forward 모드 - 탐지 테스트 (정상 전달)
+sudo python3 attacker/arp_mitm_attack.py \
+  --target1 10.10.20.10 \
+  --target2 10.10.10.10 \
+  --mode forward
+```
+
+**공격 효과:**
+- **Black Hole**: OpenCPN이 "No GPS Data" / "AIS Lost" 표시
+- **Delay**: 항해 정보가 2초 늦게 반영 → 항해 판단 불가능
+- **Sniff**: 모든 NMEA 데이터 캡처 (정보 수집)
+
+**차별점:**
+- 기존 공격(1~6번): 데이터 내용 조작 (Application Layer)
+- ARP MITM: 통신 경로 자체 공격 (Data Link Layer)
 
 #### Modbus 플러딩 공격
 ```bash
@@ -134,20 +177,36 @@ python coil_single_attack.py --attack restore
 ## 프로젝트 구조
 ```
 CokE/
-├── gps_sim.py
-├── ais_sim.py
-├── sensor_sim.py
-├── nmea_multiplexer.py
-├── plc_server.py
-├── engine_logic.py
-├── plc_exporter.py
-├── modbus_flood.py
-├── sensor_replay.py
-├── gps_jump_attack.py
-├── coil_single_attack.py
+├── field/
+│   ├── gps_sim.py
+│   ├── ais_sim.py
+│   ├── sensor_sim.py
+│   └── nmea_multiplexer.py
+├── control/
+│   ├── plc_server.py
+│   ├── engine_logic.py
+│   └── plc_exporter.py
+├── attacker/
+│   ├── arp_mitm_attack.py        ⭐ NEW
+│   ├── modbus_flood.py
+│   ├── sensor_replay.py
+│   ├── gps_jump_attack.py
+│   └── coil_single_attack.py
 └── README.md
 ```
 
-## 담당자 C 역할
-- **필수**: `modbus_flood.py`, `sensor_replay.py`
-- **옵션**: `gps_jump_attack.py`, `coil_single_attack.py`
+## 공격 시나리오 매핑 (A, B, C Zone)
+
+| 시나리오 | 공격 유형 | 주도 Zone | 공격 스크립트 |
+|---|---|---|---|
+| ① NMEA Data Spoofing | GPS/AIS 위조 | A & C | `gps_jump_attack.py` |
+| ② Modbus Write Flood | PLC 파라미터 공격 | C & B | `modbus_flood.py` |
+| ③ **ARP MITM** ⭐ | **통신 경로 탈취** | **A & B** | `arp_mitm_attack.py` |
+| ④ HMI UI 조작 | Dashboard 왜곡 | A | (Node-RED 직접 접근) |
+| ⑤ Single Modbus Coil | 부분 제어 교란 | C | `coil_single_attack.py` |
+| ⑥ Sensor Replay | 센서값 리플레이 | C & B | `sensor_replay.py` |
+
+**시나리오 3 (ARP MITM)의 차별점:**
+- 유일한 **Layer 2 공격** (나머지는 모두 Layer 7)
+- 데이터가 아닌 **네트워크 경로 자체** 공격
+- Integration Zone(B)의 **ARP 탐지 능력** 시연에 핵심적
