@@ -4,7 +4,7 @@ Control Zone - Engine Telemetry Module
 RPM, Ballast, Pump만 간단히 변화
 """
 
-from pymodbus.client.sync import ModbusTcpClient
+from pymodbus.client import ModbusTcpClient
 import time
 import logging
 
@@ -94,9 +94,15 @@ class EngineLogic:
                 f"Ballast={self.ballast}, "
                 f"Pump={'ON' if self.pump_status else 'OFF'}"
             )
-            
+
         except Exception as e:
             log.error(f"[Engine Logic] Write error: {e}")
+            # 연결 끊김 감지 시 재연결 시도
+            log.warning("[Engine Logic] Attempting to reconnect...")
+            self.disconnect()
+            time.sleep(2)
+            if not self.connect():
+                log.error("[Engine Logic] Reconnection failed")
 
 if __name__ == "__main__":
     engine = EngineLogic(plc_host='localhost', plc_port=502)
