@@ -103,17 +103,31 @@ python sensor_replay.py --replay --replay-speed 2.0 --load captured_data.json
 python gps_jump_attack.py --attack random_jump --distance 10 --frequency 5
 ```
 
-#### Coil 제어 공격 (옵션)
+#### Coil 제어 공격 (시나리오 5) ⭐
 ```bash
-# 비상 정지 공격
-python coil_single_attack.py --attack emergency_stop
+# 비상 정지 공격 (Pump OFF 강제)
+python3 attacker/coil_single_attack.py --host localhost --attack emergency_stop
 
-# 엔진 정지 공격
-python coil_single_attack.py --attack engine_shutdown
+# Pump 토글 공격 (ON/OFF 반복, 60초, 5초 간격)
+python3 attacker/coil_single_attack.py --host localhost --attack pump_toggle --duration 60 --interval 5
 
-# 복구
-python coil_single_attack.py --attack restore
+# 빠른 토글 공격 (하드웨어 손상 유도, 30초, 0.5초 간격)
+python3 attacker/coil_single_attack.py --host localhost --attack rapid_toggle --duration 30 --interval 0.5
+
+# 복구 (Pump ON으로 복원)
+python3 attacker/coil_single_attack.py --host localhost --attack restore
 ```
+
+**공격 효과:**
+- **emergency_stop**: Pump Coil을 OFF로 강제 → HMI에서 펌프 정지 표시
+- **pump_toggle**: 주기적 ON/OFF → 시스템 불안정, IDS 탐지
+- **rapid_toggle**: 빠른 ON/OFF 반복 → 하드웨어 스트레스, "repeated coil write" 탐지
+- **restore**: 정상 상태(ON)로 복구
+
+**Zone 역할:**
+- **C (Control)**: PLC 영향 시연, 제어 교란 확인
+- **B (Integration)**: Suricata "repeated coil write" rule 탐지 → 공격자 차단
+- **A (Bridge)**: HMI에서 Pump 상태 이상 시각화
 
 ## 포트 정보
 - GPS Simulator: 10110
@@ -134,17 +148,20 @@ python coil_single_attack.py --attack restore
 ## 프로젝트 구조
 ```
 CokE/
-├── gps_sim.py
-├── ais_sim.py
-├── sensor_sim.py
-├── nmea_multiplexer.py
-├── plc_server.py
-├── engine_logic.py
-├── plc_exporter.py
-├── modbus_flood.py
-├── sensor_replay.py
-├── gps_jump_attack.py
-├── coil_single_attack.py
+├── field/
+│   ├── gps_sim.py
+│   ├── ais_sim.py
+│   ├── sensor_sim.py
+│   └── nmea_multiplexer.py
+├── control/
+│   ├── plc_server.py
+│   ├── engine_logic.py
+│   └── plc_exporter.py
+├── attacker/
+│   ├── coil_single_attack.py    ⭐ NEW (Scenario 5)
+│   ├── modbus_flood.py
+│   ├── sensor_replay.py
+│   └── gps_jump_attack.py
 └── README.md
 ```
 
