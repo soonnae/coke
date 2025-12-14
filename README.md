@@ -22,34 +22,50 @@
    - 여러 소스의 데이터를 수집하고 통합
    - 클라이언트에 재전송
 
-### Control Zone (VM) - 3개
+### Control Zone (VM) - 6개
 5. **plc_server.py** - PLC 서버
    - Modbus TCP 서버
    - 엔진 제어 시스템
 
 6. **engine_logic.py** - 엔진 로직 제어기
    - PLC와 연동하여 엔진 상태 관리
-   - 안전 체크 및 자동 제어
+   - RPM, Ballast, Pump 상태 시뮬레이션
 
-7. **plc_exporter.py** - PLC Exporter
-   - Prometheus 형식으로 메트릭 내보내기
-   - 모니터링 및 시각화 지원
+7. **engine_telemetry_sender.py** - 엔진 텔레메트리 전송기 ⭐ NEW
+   - PLC 데이터를 Bridge Zone으로 전송
+   - NMEA XDR 또는 JSON 형식 지원
+   - Control Zone → Bridge Zone 연결
+
+8. **hmi_bridge.py** - HMI 브릿지 (Node-RED 연동) ⭐ NEW
+   - PLC 데이터를 HTTP REST API로 노출
+   - Node-RED HMI 대시보드 연동
+   - 웹 기반 모니터링 인터페이스 제공
+
+9. **sensor_to_plc.py** - 센서 데이터 연결기 ⭐ NEW
+   - Field Zone Sensor 데이터를 PLC로 전송
+   - UDP → Modbus 변환
+   - 센서 값을 PLC 레지스터에 매핑
+
+10. **node-red-flow.json** - Node-RED 설정 파일 ⭐ NEW
+    - HMI 대시보드 Flow 설정
+    - RPM, Ballast, Pump 게이지
+    - 펌프 제어 버튼
 
 ### Attacker VM (담당자 C) - 2개
-8. **modbus_flood.py** - Modbus 플러딩 공격
-   - Modbus TCP 프로토콜 플러딩 공격
-   - 다중 스레드 공격 시뮬레이션
+11. **modbus_flood.py** - Modbus 플러딩 공격 (TODO)
+    - Modbus TCP 프로토콜 플러딩 공격
+    - 다중 스레드 공격 시뮬레이션
 
-9. **sensor_replay.py** - 센서 재전송 공격
-   - Man-in-the-Middle 공격
-   - 패킷 캡처 및 재생
+12. **sensor_replay.py** - 센서 재전송 공격 (TODO)
+    - Man-in-the-Middle 공격
+    - 패킷 캡처 및 재생
 
 ### 옵션 - 2개
-10. **gps_jump_attack.py** - GPS 점프 공격
+13. **gps_jump_attack.py** - GPS 점프 공격 (TODO)
     - GPS 좌표 급격한 변경 공격
     - 랜덤 점프, 고정 위치, 드리프트 모드
 
-11. **coil_single_attack.py** - Coil 제어 공격
+14. **coil_single_attack.py** - Coil 제어 공격 (TODO)
     - Modbus Coil 단일 제어 공격
     - 비상 정지, 엔진 정지, 빠른 토글 공격
 
@@ -72,14 +88,25 @@ python nmea_multiplexer.py
 
 ### Control Zone 실행
 ```bash
-# PLC 서버 시작 (관리자 권한 필요할 수 있음)
+# 1. PLC 서버 시작 (각각 별도 터미널)
+cd control
 python plc_server.py
 
-# 엔진 로직 시작
+# 2. 엔진 로직 시작 (PLC에 데이터 쓰기)
 python engine_logic.py
 
-# Exporter 시작
-python plc_exporter.py
+# 3. 엔진 텔레메트리 전송 (PLC → Bridge Zone) ⭐ NEW
+python engine_telemetry_sender.py --bridge-ip 10.10.10.10 --format nmea
+
+# 4. HMI 브릿지 시작 (Node-RED 연동) ⭐ NEW
+python hmi_bridge.py --http-port 8080
+
+# 5. 센서 데이터 연결 (Field → Control) ⭐ NEW
+python sensor_to_plc.py --sensor-port 10112
+
+# HMI 대시보드 접속
+# http://localhost:8080/  (간단한 웹 대시보드)
+# http://localhost:1880/ui  (Node-RED 대시보드 - Node-RED 설치 필요)
 ```
 
 ### 공격 시뮬레이션
@@ -116,14 +143,29 @@ python coil_single_attack.py --attack restore
 ```
 
 ## 포트 정보
+
+### Field Zone
 - GPS Simulator: 10110
 - AIS Simulator: 10111
 - Sensor Simulator: 10112
 - NMEA Multiplexer: 10113
-- PLC Server (Modbus): 502
-- PLC Exporter (Prometheus): 9100
-- Sensor Replay Proxy: 10212
-- GPS Jump Proxy: 10210
+
+### Control Zone
+- PLC Server (Modbus TCP): 502
+- HMI Bridge (HTTP API): 8080 ⭐ NEW
+- Engine Telemetry Sender → Bridge: 10113 ⭐ NEW
+
+### Bridge Zone
+- OpenCPN NMEA Input: 10110
+- Engine Telemetry Input: 10113 ⭐ NEW
+
+### Attack Scripts
+- Sensor Replay Proxy: 10212 (TODO)
+- GPS Jump Proxy: 10210 (TODO)
+
+### HMI/Monitoring
+- Node-RED Dashboard: 1880
+- HMI Web Dashboard: 8080 ⭐ NEW
 
 ## 주의사항
 ⚠️ **경고**: 이 스크립트들은 교육 및 테스트 목적으로만 사용해야 합니다.
@@ -133,21 +175,122 @@ python coil_single_attack.py --attack restore
 
 ## 프로젝트 구조
 ```
-CokE/
-├── gps_sim.py
-├── ais_sim.py
-├── sensor_sim.py
-├── nmea_multiplexer.py
-├── plc_server.py
-├── engine_logic.py
-├── plc_exporter.py
-├── modbus_flood.py
-├── sensor_replay.py
-├── gps_jump_attack.py
-├── coil_single_attack.py
+coke/
+├── field/                          # Field Zone (라즈베리파이)
+│   ├── gps_sim.py
+│   ├── ais_sim.py
+│   ├── sensor_sim.py
+│   └── nmea_multiplexer.py
+│
+├── control/                        # Control Zone (VM)
+│   ├── plc_server.py
+│   ├── engine_logic.py
+│   ├── engine_telemetry_sender.py  ⭐ NEW
+│   ├── hmi_bridge.py               ⭐ NEW
+│   ├── sensor_to_plc.py            ⭐ NEW
+│   └── node-red-flow.json          ⭐ NEW
+│
+├── attack/                         # Attack Scripts (TODO)
+│   ├── modbus_flood.py             (TODO)
+│   ├── sensor_replay.py            (TODO)
+│   ├── gps_jump_attack.py          (TODO)
+│   └── coil_single_attack.py       (TODO)
+│
 └── README.md
 ```
 
 ## 담당자 C 역할
-- **필수**: `modbus_flood.py`, `sensor_replay.py`
-- **옵션**: `gps_jump_attack.py`, `coil_single_attack.py`
+- **Control Zone + Field Zone 책임자**
+- **필수 공격 스크립트**: `modbus_flood.py`, `sensor_replay.py` (TODO)
+- **옵션 공격 스크립트**: `gps_jump_attack.py`, `coil_single_attack.py` (TODO)
+- **완료된 통합 스크립트**: ✅
+  - `engine_telemetry_sender.py` - Control → Bridge 연결
+  - `hmi_bridge.py` - PLC ↔ Node-RED HMI
+  - `sensor_to_plc.py` - Field Sensor → Control PLC
+  - `node-red-flow.json` - HMI 대시보드 설정
+
+---
+
+## 🆕 새로운 기능 (Control Zone 통합 완료)
+
+### 1️⃣ Control Zone → Bridge Zone 데이터 전송
+**문제**: Control Zone의 엔진 데이터가 Bridge Zone으로 전달되지 않았음
+**해결**: `engine_telemetry_sender.py` 추가
+- PLC Modbus 데이터를 주기적으로 읽기
+- NMEA XDR 형식 또는 JSON으로 변환
+- Bridge Zone (10.10.10.10:10113)으로 UDP 전송
+- OpenCPN에서 엔진 상태 확인 가능
+
+### 2️⃣ PLC ↔ HMI (Node-RED) 연결
+**문제**: HMI 인터페이스가 없었음
+**해결**: `hmi_bridge.py` + `node-red-flow.json` 추가
+- HTTP REST API로 PLC 데이터 노출 (포트 8080)
+- 웹 기반 대시보드 내장 (http://localhost:8080)
+- Node-RED와 연동 가능
+- 실시간 RPM/Ballast/Pump 모니터링
+- 펌프 제어 버튼 제공
+
+### 3️⃣ Sensor Simulator → PLC 연결
+**문제**: Sensor 데이터가 받기만 하고 사용되지 않았음
+**해결**: `sensor_to_plc.py` 추가
+- Field Zone의 센서 데이터를 UDP로 수신
+- 엔진/연료/냉각/전기 데이터 파싱
+- PLC Modbus 레지스터(10~18번)에 자동 매핑
+- Control Zone이 실제 센서 값 기반으로 동작
+
+---
+
+## Node-RED 설치 및 설정 (선택)
+
+### Node-RED 설치
+```bash
+# Node.js 설치 (필요시)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Node-RED 설치
+sudo npm install -g --unsafe-perm node-red
+
+# Dashboard 모듈 설치
+cd ~/.node-red
+npm install node-red-dashboard
+```
+
+### Node-RED 시작 및 설정
+```bash
+# Node-RED 실행
+node-red
+
+# 브라우저에서 열기
+# http://localhost:1880
+
+# Flow 가져오기
+# 1. Menu → Import → Clipboard
+# 2. control/node-red-flow.json 내용 복사/붙여넣기
+# 3. Deploy 클릭
+
+# 대시보드 접속
+# http://localhost:1880/ui
+```
+
+### HMI Bridge API 사용법
+```bash
+# 전체 상태 조회
+curl http://localhost:8080/api/plc/status
+
+# RPM만 조회
+curl http://localhost:8080/api/plc/rpm
+
+# 펌프 토글
+curl -X POST http://localhost:8080/api/plc/pump/toggle
+
+# 레지스터 쓰기 (RPM 변경)
+curl -X POST http://localhost:8080/api/plc/write_register \
+  -H "Content-Type: application/json" \
+  -d '{"address": 0, "value": 1500}'
+
+# Coil 쓰기 (펌프 ON)
+curl -X POST http://localhost:8080/api/plc/write_coil \
+  -H "Content-Type: application/json" \
+  -d '{"address": 0, "value": true}'
+```
