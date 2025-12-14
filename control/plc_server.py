@@ -8,7 +8,6 @@ Compatible with pymodbus 3.x
 
 from pymodbus.server import StartTcpServer
 from pymodbus.datastore import ModbusSequentialDataBlock, ModbusServerContext
-from pymodbus.device import ModbusDeviceIdentification
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -39,15 +38,6 @@ class PLCServer:
             single=True
         )
 
-        # Device identification (optional)
-        self.identity = ModbusDeviceIdentification()
-        self.identity.VendorName = 'Ship Control System'
-        self.identity.ProductCode = 'PLC'
-        self.identity.VendorUrl = 'http://github.com/soonnae/coke'
-        self.identity.ProductName = 'Ship Engine PLC'
-        self.identity.ModelName = 'Minimal PLC v1.0'
-        self.identity.MajorMinorRevision = '1.0.0'
-
     def start(self):
         log.info(f"[PLC Server] Starting on {self.host}:{self.port}")
         log.info("[PLC Server] Holding Registers:")
@@ -60,7 +50,6 @@ class PLCServer:
         try:
             StartTcpServer(
                 context=self.store,
-                identity=self.identity,
                 address=(self.host, self.port),
                 allow_reuse_address=True
             )
