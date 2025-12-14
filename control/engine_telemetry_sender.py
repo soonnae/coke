@@ -4,7 +4,7 @@ Control Zone → Bridge Zone 데이터 전송
 PLC Modbus 데이터를 읽어서 Bridge Zone으로 NMEA XDR 형식 또는 JSON으로 전송
 """
 
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client.sync import ModbusTcpClient
 import socket
 import time
 import logging

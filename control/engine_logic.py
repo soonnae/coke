@@ -4,7 +4,7 @@ Control Zone - Engine Telemetry Module
 RPM, Ballast, Pump만 간단히 변화
 """
 
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client.sync import ModbusTcpClient
 import time
 import logging
 

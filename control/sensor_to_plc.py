@@ -4,7 +4,7 @@ Field Zone Sensor Simulator 데이터를 Control Zone PLC로 연결
 UDP로 JSON 센서 데이터를 수신하여 Modbus 레지스터에 매핑
 """
 
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client.sync import ModbusTcpClient
 import socket
 import json
 import logging
