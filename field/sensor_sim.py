@@ -187,4 +187,19 @@ class SensorSimulator:
             })
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Ship Sensor Simulator')
+    parser.add_argument('--target-ip', default="10.10.20.10",
+                        help='Target IP address (default: 10.10.20.10)')
+    parser.add_argument('--target-port', type=int, default=10112,
+                        help='Target port (default: 10112)')
+
+    args = parser.parse_args()
+
+    # Override global TARGET_IP and TARGET_PORT
+    global TARGET_IP, TARGET_PORT
+    TARGET_IP = args.target_ip
+    TARGET_PORT = args.target_port
+
     SensorSimulator().start()
