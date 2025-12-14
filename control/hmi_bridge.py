@@ -4,7 +4,7 @@ Control Zone PLC ↔ Node-RED HMI 연결
 HTTP REST API 제공으로 Node-RED에서 PLC 데이터 읽기/쓰기 가능
 """
 
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client.sync import ModbusTcpClient
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import threading

@@ -3,11 +3,11 @@ PLC Server (Modbus TCP Server)
 Control Zone - Minimal Software PLC
 Registers: RPM, Ballast, Pump
 Coils: Pump ON/OFF
-Compatible with pymodbus 3.x
+Compatible with pymodbus 2.5.3
 """
 
-from pymodbus.server import StartTcpServer
-from pymodbus.datastore import ModbusSequentialDataBlock, ModbusServerContext
+from pymodbus.server.sync import StartTcpServer
+from pymodbus.datastore import ModbusSequentialDataBlock, ModbusSlaveContext, ModbusServerContext
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -28,15 +28,15 @@ class PLCServer:
         # Coil for Pump ON/OFF
         initial_coils = [True]
 
-        # Create Modbus datastore (pymodbus 3.x)
-        # Note: pymodbus 3.x uses different API
-        self.store = ModbusServerContext(
+        # Create Modbus datastore (pymodbus 2.x)
+        store = ModbusSlaveContext(
             di=ModbusSequentialDataBlock(0, [0]*100),                     # Discrete Inputs
             co=ModbusSequentialDataBlock(0, initial_coils + [False]*99),  # Coils
             hr=ModbusSequentialDataBlock(0, initial_registers + [0]*97),  # Holding Registers
-            ir=ModbusSequentialDataBlock(0, [0]*100),                     # Input Registers
-            single=True
+            ir=ModbusSequentialDataBlock(0, [0]*100)                      # Input Registers
         )
+
+        self.context = ModbusServerContext(slaves=store, single=True)
 
     def start(self):
         log.info(f"[PLC Server] Starting on {self.host}:{self.port}")
@@ -49,7 +49,7 @@ class PLCServer:
 
         try:
             StartTcpServer(
-                context=self.store,
+                context=self.context,
                 address=(self.host, self.port),
                 allow_reuse_address=True
             )
