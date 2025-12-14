@@ -9,11 +9,15 @@ import socket
 import json
 from datetime import datetime
 
-TARGET_IP = "10.10.20.10"
-TARGET_PORT = 10112
-
 class SensorSimulator:
-    def __init__(self):
+    def __init__(self, target_ip="10.10.40.10", target_port=10112):
+        """
+        Args:
+            target_ip: 센서 데이터를 전송할 IP (기본값: Control Zone)
+            target_port: 센서 데이터를 전송할 포트
+        """
+        self.target_ip = target_ip
+        self.target_port = target_port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
         # 엔진 센서 (메인 엔진)
@@ -41,23 +45,23 @@ class SensorSimulator:
         
     def start(self):
         """센서 시뮬레이터 시작"""
-        print(f"[Sensor Simulator] Sending to: {TARGET_IP}:{TARGET_PORT}")
-        
+        print(f"[Sensor Simulator] Sending to: {self.target_ip}:{self.target_port}")
+
         while True:
             try:
                 # 센서 데이터 생성
                 sensor_data = self.generate_sensor_data()
-                
+
                 # JSON 형식으로 전송
                 message = json.dumps(sensor_data)
-                self.sock.sendto(message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
+                self.sock.sendto(message.encode('utf-8'), (self.target_ip, self.target_port))
                 print(f"[SEND] {json.dumps(sensor_data, indent=2)}")
-                
+
                 # 센서 값 업데이트
                 self.update_sensors()
-                
+
                 time.sleep(2)  # 2초마다 전송
-                
+
             except KeyboardInterrupt:
                 print("\n[Sensor Simulator] Shutting down...")
                 break
@@ -190,16 +194,13 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Ship Sensor Simulator')
-    parser.add_argument('--target-ip', default="10.10.20.10",
-                        help='Target IP address (default: 10.10.20.10)')
+    parser.add_argument('--target-ip', default="10.10.40.10",
+                        help='Target IP address (default: 10.10.40.10 - Control Zone)')
     parser.add_argument('--target-port', type=int, default=10112,
                         help='Target port (default: 10112)')
 
     args = parser.parse_args()
 
-    # Override global TARGET_IP and TARGET_PORT
-    global TARGET_IP, TARGET_PORT
-    TARGET_IP = args.target_ip
-    TARGET_PORT = args.target_port
-
-    SensorSimulator().start()
+    # 센서 시뮬레이터 시작
+    simulator = SensorSimulator(target_ip=args.target_ip, target_port=args.target_port)
+    simulator.start()
