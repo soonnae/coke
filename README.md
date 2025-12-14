@@ -72,8 +72,14 @@
 ## 필요한 Python 패키지
 
 ```bash
-pip install pymodbus prometheus-client
+# pymodbus 3.x 사용 (3.0.0 이상)
+pip install pymodbus>=3.0.0
+
+# 추가 패키지
+pip install prometheus-client
 ```
+
+**중요**: 이 프로젝트는 pymodbus 3.x를 사용합니다. 2.x와 API가 다르니 주의하세요!
 
 ## 실행 방법
 
