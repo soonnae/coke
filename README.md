@@ -44,12 +44,23 @@
    - Man-in-the-Middle 공격
    - 패킷 캡처 및 재생
 
+### Initialization Poisoning (시나리오 3) - 2개 ⭐
+10. **gps_sim_poisoned.py** - GPS 초기화 오염
+    - 시작 시점부터 잘못된 위치 (~1km offset)
+    - 이후 모든 항적이 오염된 기준점 기반 계산
+    - Boot phase vulnerability 시연
+
+11. **plc_server_poisoned.py** - PLC 초기화 오염
+    - 시작 시점부터 잘못된 레지스터 값 (RPM -50, Ballast -5)
+    - 모든 제어 로직이 틀린 baseline 기반 동작
+    - Configuration integrity 시연
+
 ### 옵션 - 2개
-10. **gps_jump_attack.py** - GPS 점프 공격
+12. **gps_jump_attack.py** - GPS 점프 공격
     - GPS 좌표 급격한 변경 공격
     - 랜덤 점프, 고정 위치, 드리프트 모드
 
-11. **coil_single_attack.py** - Coil 제어 공격
+13. **coil_single_attack.py** - Coil 제어 공격
     - Modbus Coil 단일 제어 공격
     - 비상 정지, 엔진 정지, 빠른 토글 공격
 
@@ -129,6 +140,47 @@ python3 attacker/coil_single_attack.py --host localhost --attack restore
 - **B (Integration)**: Suricata "repeated coil write" rule 탐지 → 공격자 차단
 - **A (Bridge)**: HMI에서 Pump 상태 이상 시각화
 
+#### Initialization Poisoning (시나리오 3) ⭐ NEW
+```bash
+# 방법 1: GPS 초기화 오염 시연
+# 정상 GPS 대신 오염된 버전 실행
+python3 field/gps_sim_poisoned.py
+
+# 방법 2: PLC 초기화 오염 시연
+# 정상 PLC 대신 오염된 버전 실행
+python3 control/plc_server_poisoned.py
+
+# 방법 3: 비교 시연 (권장)
+# 1) 먼저 정상 버전 실행 → OpenCPN/HMI 확인
+# 2) 중지 후 오염 버전 실행 → 차이 관찰
+```
+
+**공격 효과:**
+- **GPS Poisoned**:
+  - 시작 시점부터 위치 ~1km offset
+  - 이후 모든 항적이 틀린 기준점 기반 계산
+  - OpenCPN에서 "왜 계속 위치가 이상하지?" 관찰
+
+- **PLC Poisoned**:
+  - 시작 시점부터 RPM -50, Ballast -5
+  - Engine Logic이 틀린 baseline 기반 동작
+  - HMI가 틀린 값을 "정상"으로 표시
+
+**차별점:**
+- 기존 시나리오: 운영 중 실시간 공격
+- **이 시나리오: 시작 단계 1회 오염 → 지속적 영향**
+- 탐지: Baseline deviation (초기 설정 무결성 검증)
+
+**Zone 역할:**
+- **C (Field/Control)**: 오염된 초기값으로 시작
+- **B (Integration)**: "Baseline deviation from known-good" 탐지
+- **A (Bridge)**: 미세하게 계속 어긋나는 현상 시각화
+
+**실제 사고 맥락:**
+- 선박 기동 시 GPS 초기 Fix 오류
+- PLC Firmware 업데이트 후 잘못된 기본값
+- Configuration file 변조 (Supply chain attack)
+
 ## 포트 정보
 - GPS Simulator: 10110
 - AIS Simulator: 10111
@@ -150,11 +202,13 @@ python3 attacker/coil_single_attack.py --host localhost --attack restore
 CokE/
 ├── field/
 │   ├── gps_sim.py
+│   ├── gps_sim_poisoned.py      ⭐ NEW (Scenario 3)
 │   ├── ais_sim.py
 │   ├── sensor_sim.py
 │   └── nmea_multiplexer.py
 ├── control/
 │   ├── plc_server.py
+│   ├── plc_server_poisoned.py   ⭐ NEW (Scenario 3)
 │   ├── engine_logic.py
 │   └── plc_exporter.py
 ├── attacker/
