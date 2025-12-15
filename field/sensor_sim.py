@@ -9,7 +9,7 @@ import socket
 import json
 from datetime import datetime
 
-TARGET_IP = "10.10.20.10"
+TARGET_IP = "127.0.0.1"  # Send to local multiplexer
 TARGET_PORT = 10112
 
 class SensorSimulator:
@@ -198,6 +198,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Override global TARGET_IP and TARGET_PORT
+    import builtins
+    builtins.TARGET_IP = args.target_ip
+    builtins.TARGET_PORT = args.target_port
+
+    # Update class reference
     global TARGET_IP, TARGET_PORT
     TARGET_IP = args.target_ip
     TARGET_PORT = args.target_port
