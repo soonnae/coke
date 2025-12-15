@@ -9,7 +9,7 @@ import socket
 import json
 from datetime import datetime
 
-TARGET_IP = "127.0.0.1"  # Send to local multiplexer
+TARGET_IP = "10.10.20.10"
 TARGET_PORT = 10112
 
 class SensorSimulator:
