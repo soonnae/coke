@@ -198,11 +198,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Override global TARGET_IP and TARGET_PORT
-    import builtins
-    builtins.TARGET_IP = args.target_ip
-    builtins.TARGET_PORT = args.target_port
-
-    # Update class reference
     global TARGET_IP, TARGET_PORT
     TARGET_IP = args.target_ip
     TARGET_PORT = args.target_port
