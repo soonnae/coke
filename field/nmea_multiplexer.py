@@ -1,9 +1,7 @@
 """
 NMEA Multiplexer
 GPS/AIS NMEA 문장을 받아 Bridge(OpenCPN)로 그대로 포워딩
-Sensor 데이터는 JSON으로 받아:
-  1) Control Zone (sensor_to_plc.py)로 JSON 포워딩
-  2) Bridge Zone (OpenCPN)로 NMEA XDR 변환 후 포워딩
+Sensor 데이터는 JSON으로 받아 Bridge Zone으로 NMEA XDR 변환 후 포워딩
 """
 
 import socket
@@ -15,14 +13,10 @@ import json
 TARGET_IP = "10.10.10.10"      # Bridge Zone (OpenCPN)
 TARGET_PORT = 10110            # OpenCPN이 듣는 NMEA 포트
 
-# 🔧 Control Zone 목적지 (Sensor 데이터 JSON 포워딩)
-CONTROL_IP = "10.10.20.10"     # Control Zone (PLC Server)
-CONTROL_PORT = 10112           # sensor_to_plc.py가 듣는 포트
-
 # 🔧 Field Zone 수신 포트
 GPS_PORT = 10110
 AIS_PORT = 10111
-SENSOR_PORT = 10112            # Sensor 데이터 수신 후 양쪽으로 전달
+SENSOR_PORT = 10113            # Sensor 데이터 수신 (NMEA 변환용)
 
 class NMEAMultiplexer:
     def __init__(self):
@@ -156,9 +150,7 @@ class NMEAMultiplexer:
         print(f"[GPS   ] 0.0.0.0:{GPS_PORT}")
         print(f"[AIS   ] 0.0.0.0:{AIS_PORT}")
         print(f"[Sensor] 0.0.0.0:{SENSOR_PORT}")
-        print(f"[FORWARD GPS/AIS] → Bridge Zone: {TARGET_IP}:{TARGET_PORT}")
-        print(f"[FORWARD SENSOR JSON] → Control Zone: {CONTROL_IP}:{CONTROL_PORT}")
-        print(f"[FORWARD SENSOR NMEA] → Bridge Zone: {TARGET_IP}:{TARGET_PORT}")
+        print(f"[FORWARD] → Bridge Zone: {TARGET_IP}:{TARGET_PORT}")
 
         # Thread 시작
         threading.Thread(target=self.receive_gps, daemon=True).start()
@@ -225,29 +217,21 @@ class NMEAMultiplexer:
                 print("[AIS ERROR]", e)
 
     # ------------------------------
-    # SENSOR 처리 (Control & Bridge 양쪽으로 포워딩)
+    # SENSOR 처리 (Bridge로만 NMEA 변환 후 포워딩)
     # ------------------------------
     def receive_sensor(self):
         print("[NMEA MUX] Sensor receiver started")
-        print(f"[NMEA MUX] Sensor JSON → Control Zone: {CONTROL_IP}:{CONTROL_PORT}")
-        print(f"[NMEA MUX] Sensor NMEA → Bridge Zone: {TARGET_IP}:{TARGET_PORT}")
         while self.running:
             try:
                 data, addr = self.sensor_sock.recvfrom(4096)
                 msg = data.decode("utf-8", errors="ignore").strip()
-                print(f"[SENSOR] Received: {msg[:80]}...")  # 처음 80자만 출력
                 self.stats["sensor_received"] += 1
 
-                # 1️⃣ Control Zone으로 JSON 그대로 포워딩
-                self.send_sock.sendto(data, (CONTROL_IP, CONTROL_PORT))
-                print(f"[SENSOR→Control] JSON forwarded to {CONTROL_IP}:{CONTROL_PORT}")
-
-                # 2️⃣ Bridge Zone으로 NMEA XDR 변환 후 포워딩
+                # Bridge Zone으로 NMEA XDR 변환 후 포워딩
                 xdr_sentences = self.json_to_nmea_xdr(msg)
                 for xdr in xdr_sentences:
                     xdr_data = (xdr + "\r\n").encode("ascii")
                     self.send_sock.sendto(xdr_data, (TARGET_IP, TARGET_PORT))
-                    print(f"[SENSOR→Bridge] {xdr}")
                     self.stats["messages_sent"] += 1
 
             except Exception as e:
