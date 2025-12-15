@@ -35,32 +35,37 @@
    - Prometheus 형식으로 메트릭 내보내기
    - 모니터링 및 시각화 지원
 
-### Attacker VM (담당자 C) - 2개
-8. **modbus_flood.py** - Modbus 플러딩 공격
+### Attacker VM - 3개
+8. **nmea_malformed_attack.py** - NMEA Malformed 공격 ⭐ NEW
+   - Protocol Format Attack (입력 검증 실패 공격)
+   - 6가지 malformed 패턴 (체크섬, 필드누락, 긴필드, 특수문자, 헤더누락, 잘못된타입)
+   - Parser robustness 테스트
+
+9. **modbus_flood.py** - Modbus 플러딩 공격
    - Modbus TCP 프로토콜 플러딩 공격
    - 다중 스레드 공격 시뮬레이션
 
-9. **sensor_replay.py** - 센서 재전송 공격
-   - Man-in-the-Middle 공격
-   - 패킷 캡처 및 재생
+10. **sensor_replay.py** - 센서 재전송 공격
+    - Man-in-the-Middle 공격
+    - 패킷 캡처 및 재생
 
 ### Initialization Poisoning (시나리오 3) - 2개 ⭐
-10. **gps_sim_poisoned.py** - GPS 초기화 오염
+11. **gps_sim_poisoned.py** - GPS 초기화 오염
     - 시작 시점부터 잘못된 위치 (~1km offset)
     - 이후 모든 항적이 오염된 기준점 기반 계산
     - Boot phase vulnerability 시연
 
-11. **plc_server_poisoned.py** - PLC 초기화 오염
+12. **plc_server_poisoned.py** - PLC 초기화 오염
     - 시작 시점부터 잘못된 레지스터 값 (RPM -50, Ballast -5)
     - 모든 제어 로직이 틀린 baseline 기반 동작
     - Configuration integrity 시연
 
 ### 옵션 - 2개
-12. **gps_jump_attack.py** - GPS 점프 공격
+13. **gps_jump_attack.py** - GPS 점프 공격
     - GPS 좌표 급격한 변경 공격
     - 랜덤 점프, 고정 위치, 드리프트 모드
 
-13. **coil_single_attack.py** - Coil 제어 공격
+14. **coil_single_attack.py** - Coil 제어 공격
     - Modbus Coil 단일 제어 공격
     - 비상 정지, 엔진 정지, 빠른 토글 공격
 
@@ -140,6 +145,40 @@ python3 attacker/coil_single_attack.py --host localhost --attack restore
 - **B (Integration)**: Suricata "repeated coil write" rule 탐지 → 공격자 차단
 - **A (Bridge)**: HMI에서 Pump 상태 이상 시각화
 
+#### NMEA Malformed Packet Attack (Protocol Format Attack) ⭐ NEW
+```bash
+# 체크섬 오류 공격
+python3 attacker/nmea_malformed_attack.py --target 10.10.10.10 --mode invalid_checksum --duration 30
+
+# 필드 누락 공격
+python3 attacker/nmea_malformed_attack.py --target 10.10.10.10 --mode missing_fields --duration 30
+
+# 비정상적으로 긴 필드
+python3 attacker/nmea_malformed_attack.py --target 10.10.10.10 --mode oversized_field --duration 30
+
+# 특수문자 주입
+python3 attacker/nmea_malformed_attack.py --target 10.10.10.10 --mode special_chars --duration 30
+
+# 모든 패턴 혼합 (탐지 회피 시도)
+python3 attacker/nmea_malformed_attack.py --target 10.10.10.10 --mode mixed --duration 60 --interval 3
+```
+
+**공격 효과:**
+- **invalid_checksum**: 체크섬이 틀린 NMEA → Parser 검증 실패
+- **missing_fields**: 필수 필드 누락 → Parser 오류
+- **oversized_field**: 비정상적으로 긴 필드 → 버퍼/메모리 스트레스
+- **special_chars**: 특수문자 포함 → 인젝션 시도
+- **mixed**: 모든 패턴 순환 → IDS 탐지 회피 시도
+
+**Zone 역할:**
+- **A (Bridge)**: OpenCPN/Listener 파서 오류 처리 관찰 (패킷 무시? 로그? Exception?)
+- **B (Integration)**: Suricata "Invalid NMEA Format" / "Protocol Anomaly" 탐지
+- **C (Field)**: 정상 NMEA 송신 유지 (공격과 무관)
+
+**차별점:**
+- 기존 시나리오: 데이터 값 조작 (Spoofing, Flood 등)
+- **이 시나리오: 프로토콜 형식 자체 공격** (입력 검증 실패 유도)
+
 #### Initialization Poisoning (시나리오 3) ⭐ NEW
 ```bash
 # 방법 1: GPS 초기화 오염 시연
@@ -212,6 +251,7 @@ CokE/
 │   ├── engine_logic.py
 │   └── plc_exporter.py
 ├── attacker/
+│   ├── nmea_malformed_attack.py ⭐ NEW (Protocol Format Attack)
 │   ├── coil_single_attack.py    ⭐ NEW (Scenario 5)
 │   ├── modbus_flood.py
 │   ├── sensor_replay.py
