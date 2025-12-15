@@ -1,109 +1,95 @@
 """
 Engine Logic Controller
-Control Zone - Engine Telemetry Module
-RPM, Ballast, Pump만 간단히 변화
+Decision & Physics Layer
+
+Ballast:
+- Range: 40.0 ~ 50.0
+- One decimal
+- Next value ∈ [prev-3.0, prev+3.0] ∩ [40,50]
+
+Pump Mode (logical):
+  +1 = FILL
+   0 = HOLD
+  -1 = DRAIN
+
+Pump Mode (PLC stored):
+  uint16 (encode before write)
 """
 
 from pymodbus.client.sync import ModbusTcpClient
 import time
+import random
 import logging
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-class EngineLogic:
-    def __init__(self, plc_host='localhost', plc_port=502):
-        self.plc_host = plc_host
-        self.plc_port = plc_port
-        self.client = None
-        
-        # 초기값
-        self.rpm = 800
-        self.ballast = 50
-        self.pump_status = 1
-        
-        # 순환 패턴
-        self.rpm_target = [800, 1000, 1200, 900]
-        self.ballast_target = [40, 45, 50, 45]
+BALLAST_MIN = 40.0
+BALLAST_MAX = 50.0
+DELTA_LIMIT = 3.0
+INTERVAL = 2
 
-        self.rpm_index = 0
-        self.ballast_index = 0
-        
+def encode_uint16(v: int) -> int:
+    """signed int → uint16 for Modbus write"""
+    return v & 0xFFFF
+
+class EngineLogic:
+    def __init__(self, plc_host="localhost", plc_port=502):
+        self.client = ModbusTcpClient(plc_host, port=plc_port)
+        self.ballast = 45.0
+        self.rpm_pattern = [800, 1000, 1200, 900]
+        self.rpm_idx = 0
+
     def connect(self):
-        """PLC 서버 연결"""
-        try:
-            self.client = ModbusTcpClient(self.plc_host, port=self.plc_port)
-            if self.client.connect():
-                log.info(f"[Engine Logic] Connected to PLC at {self.plc_host}:{self.plc_port}")
-                return True
-            else:
-                log.error("[Engine Logic] Failed to connect to PLC")
-                return False
-        except Exception as e:
-            log.error(f"[Engine Logic] Connection error: {e}")
-            return False
-    
-    def disconnect(self):
-        if self.client:
-            self.client.close()
-    
+        if self.client.connect():
+            log.info("[EngineLogic] Connected to PLC")
+            return True
+        log.error("[EngineLogic] PLC connection failed")
+        return False
+
+    def update_ballast(self):
+        prev = self.ballast
+        low = max(BALLAST_MIN, prev - DELTA_LIMIT)
+        high = min(BALLAST_MAX, prev + DELTA_LIMIT)
+        self.ballast = round(random.uniform(low, high), 1)
+
+    def decide_pump_mode(self) -> int:
+        if self.ballast <= BALLAST_MIN:
+            return 1      # FILL
+        elif self.ballast >= BALLAST_MAX:
+            return -1     # DRAIN
+        return 0          # HOLD
+
     def run(self):
-        """메인 루프"""
         if not self.connect():
             return
-        
-        log.info("[Engine Logic] Starting simple control loop")
-        
+
         try:
-            iteration = 0
             while True:
-                self.update_values(iteration)
-                self.write_to_plc()
-                iteration += 1
-                time.sleep(2)
-                
+                rpm = self.rpm_pattern[self.rpm_idx]
+                self.rpm_idx = (self.rpm_idx + 1) % len(self.rpm_pattern)
+
+                prev_ballast = self.ballast
+                self.update_ballast()
+                pump_mode = self.decide_pump_mode()
+
+                # 🔑 WRITE (encode signed → uint16)
+                self.client.write_register(0, rpm)
+                self.client.write_register(1, int(self.ballast * 10))
+                self.client.write_register(2, encode_uint16(pump_mode))
+
+                log.info(
+                    f"[EngineLogic] RPM={rpm}, "
+                    f"Ballast={prev_ballast:.1f}→{self.ballast:.1f}, "
+                    f"PumpMode={pump_mode}"
+                )
+
+                time.sleep(INTERVAL)
+
         except KeyboardInterrupt:
-            log.info("\n[Engine Logic] Shutting down...")
+            log.info("[EngineLogic] Shutdown")
         finally:
-            self.disconnect()
-    
-    def update_values(self, iteration):
-        """값 업데이트"""
-        if iteration % 5 == 0:
-            self.rpm = self.rpm_target[self.rpm_index]
-            self.rpm_index = (self.rpm_index + 1) % len(self.rpm_target)
-            
-            self.ballast = self.ballast_target[self.ballast_index]
-            self.ballast_index = (self.ballast_index + 1) % len(self.ballast_target)
-            
-            self.pump_status = 1 - self.pump_status  # ON/OFF toggle
-    
-    def write_to_plc(self):
-        """PLC에 값 쓰기 (안정 버전)"""
-        try:
-            # Holding Registers 개별 쓰기
-            self.client.write_register(0, int(self.rpm))
-            self.client.write_register(1, int(self.ballast))
-            self.client.write_register(2, int(self.pump_status))
-
-            # Coil 쓰기
-            self.client.write_coil(0, bool(self.pump_status))
-
-            log.info(
-                f"[Engine Logic] RPM={self.rpm}, "
-                f"Ballast={self.ballast}, "
-                f"Pump={'ON' if self.pump_status else 'OFF'}"
-            )
-
-        except Exception as e:
-            log.error(f"[Engine Logic] Write error: {e}")
-            # 연결 끊김 감지 시 재연결 시도
-            log.warning("[Engine Logic] Attempting to reconnect...")
-            self.disconnect()
-            time.sleep(2)
-            if not self.connect():
-                log.error("[Engine Logic] Reconnection failed")
+            self.client.close()
 
 if __name__ == "__main__":
-    engine = EngineLogic(plc_host='localhost', plc_port=502)
-    engine.run()
+    EngineLogic().run()
