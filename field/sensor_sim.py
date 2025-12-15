@@ -9,8 +9,12 @@ import socket
 import json
 from datetime import datetime
 
-TARGET_IP = "127.0.0.1"  # Send to local multiplexer
+TARGET_IP = "10.10.20.10"
 TARGET_PORT = 10112
+
+# Multiplexer 설정 (Bridge Zone용 NMEA 변환)
+MULTIPLEXER_IP = "127.0.0.1"
+MULTIPLEXER_PORT = 10113
 
 class SensorSimulator:
     def __init__(self):
@@ -41,21 +45,29 @@ class SensorSimulator:
         
     def start(self):
         """센서 시뮬레이터 시작"""
-        print(f"[Sensor Simulator] Sending to: {TARGET_IP}:{TARGET_PORT}")
-        
+        print(f"[Sensor Simulator] Sending to:")
+        print(f"  - Control Zone: {TARGET_IP}:{TARGET_PORT}")
+        print(f"  - Multiplexer: {MULTIPLEXER_IP}:{MULTIPLEXER_PORT}")
+
         while True:
             try:
                 # 센서 데이터 생성
                 sensor_data = self.generate_sensor_data()
-                
+
                 # JSON 형식으로 전송
                 message = json.dumps(sensor_data)
+
+                # 1) Control Zone으로 전송
                 self.sock.sendto(message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
-                print(f"[SEND] {json.dumps(sensor_data, indent=2)}")
-                
+
+                # 2) Multiplexer로 전송 (Bridge Zone NMEA 변환용)
+                self.sock.sendto(message.encode('utf-8'), (MULTIPLEXER_IP, MULTIPLEXER_PORT))
+
+                print(f"[SENT] Engine: {sensor_data['engine']['rpm']:.0f}RPM, {sensor_data['engine']['temperature']:.1f}°C | Fuel: {sensor_data['fuel']['level']:.1f}%")
+
                 # 센서 값 업데이트
                 self.update_sensors()
-                
+
                 time.sleep(2)  # 2초마다 전송
                 
             except KeyboardInterrupt:
@@ -198,11 +210,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Override global TARGET_IP and TARGET_PORT
-    import builtins
-    builtins.TARGET_IP = args.target_ip
-    builtins.TARGET_PORT = args.target_port
-
-    # Update class reference
     global TARGET_IP, TARGET_PORT
     TARGET_IP = args.target_ip
     TARGET_PORT = args.target_port
