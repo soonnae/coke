@@ -227,9 +227,13 @@ class NMEAMultiplexer:
                 msg = data.decode("utf-8", errors="ignore").strip()
                 self.stats["sensor_received"] += 1
 
+                # 받은 JSON 센서 데이터 출력
+                print(f"[SENSOR] {msg}")
+
                 # Bridge Zone으로 NMEA XDR 변환 후 포워딩
                 xdr_sentences = self.json_to_nmea_xdr(msg)
                 for xdr in xdr_sentences:
+                    print(f"[SENSOR→XDR] {xdr}")
                     xdr_data = (xdr + "\r\n").encode("ascii")
                     self.send_sock.sendto(xdr_data, (TARGET_IP, TARGET_PORT))
                     self.stats["messages_sent"] += 1
