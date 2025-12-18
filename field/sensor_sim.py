@@ -39,6 +39,7 @@ class SensorSimulator:
         self.battery_voltage = 24.5  # V
         self.rudder_angle = 0.0  # degrees
         self.water_depth = 50.0  # meters
+        self.speed = 10.0  # knots (선박 속력)
         
         # 알람 상태
         self.alarms = []
@@ -103,7 +104,8 @@ class SensorSimulator:
             },
             "navigation": {
                 "rudder_angle": round(self.rudder_angle, 1),
-                "water_depth": round(self.water_depth, 1)
+                "water_depth": round(self.water_depth, 1),
+                "speed": round(self.speed, 1)
             },
             "alarms": self.alarms.copy()
         }
@@ -153,6 +155,10 @@ class SensorSimulator:
         # 수심 (±5m)
         self.water_depth += random.uniform(-5, 5)
         self.water_depth = max(10, min(200, self.water_depth))
+
+        # 속력 (±0.5 knots)
+        self.speed += random.uniform(-0.5, 0.5)
+        self.speed = max(5, min(15, self.speed))
     
     def check_alarms(self):
         """알람 상태 체크"""
