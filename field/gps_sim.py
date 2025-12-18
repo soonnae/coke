@@ -108,9 +108,13 @@ class GPSSimulator:
         self.latitude += delta_lat
         self.longitude += delta_lon
 
+        # 속력 변동 (±0.5 knots)
+        self.speed += random.uniform(-0.5, 0.5)
+        self.speed = max(5.0, min(15.0, self.speed))
+
         # 디버깅용 위치 출력
         if int(time.time()) % 10 == 0:  # 10초마다
-            print(f"[Position] Lat: {self.latitude:.6f}, Lon: {self.longitude:.6f}")
+            print(f"[Position] Lat: {self.latitude:.6f}, Lon: {self.longitude:.6f}, Speed: {self.speed:.1f} knots")
 
 if __name__ == "__main__":
     GPSSimulator().start()
