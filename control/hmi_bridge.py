@@ -21,9 +21,33 @@ class PLCCache:
     def __init__(self, host="localhost", port=502):
         self.client = ModbusTcpClient(host, port=port)
         self.data = {
-            "rpm": 0,
-            "ballast": 0.0,
-            "pump_status": 0,
+            # Control logic data (legacy, for reference)
+            "control_rpm": 0,
+            "control_ballast": 0.0,
+            "control_pump_status": 0,
+            # Field Zone sensor data (registers 10-21)
+            "engine": {
+                "rpm": 0,
+                "temperature": 0,
+                "oil_pressure": 0.0,
+                "load": 0
+            },
+            "fuel": {
+                "level": 0,
+                "consumption_rate": 0.0,
+                "temperature": 0
+            },
+            "cooling": {
+                "temperature": 0,
+                "pressure": 0.0
+            },
+            "electrical": {
+                "battery_voltage": 0.0
+            },
+            "navigation": {
+                "rudder_angle": 0,
+                "water_depth": 0
+            },
             "connected": False,
             "last_update": 0
         }
@@ -43,12 +67,38 @@ class PLCCache:
                         time.sleep(3)
                         continue
 
-                r = self.client.read_holding_registers(0, 3)
-                if not r.isError():
+                # Read control logic registers (0-2) for reference
+                r_control = self.client.read_holding_registers(0, 3)
+
+                # Read sensor data registers (10-21, total 12 registers)
+                r_sensors = self.client.read_holding_registers(10, 12)
+
+                if not r_control.isError() and not r_sensors.isError():
                     with self.lock:
-                        self.data["rpm"] = r.registers[0]
-                        self.data["ballast"] = r.registers[1] / 10.0
-                        self.data["pump_status"] = decode_int16(r.registers[2])
+                        # Control logic (legacy)
+                        self.data["control_rpm"] = r_control.registers[0]
+                        self.data["control_ballast"] = r_control.registers[1] / 10.0
+                        self.data["control_pump_status"] = decode_int16(r_control.registers[2])
+
+                        # Field Zone sensor data
+                        regs = r_sensors.registers
+                        self.data["engine"]["rpm"] = regs[0]
+                        self.data["engine"]["temperature"] = regs[1]
+                        self.data["engine"]["oil_pressure"] = regs[2] / 10.0
+                        self.data["engine"]["load"] = regs[3]
+
+                        self.data["fuel"]["level"] = regs[4]
+                        self.data["fuel"]["consumption_rate"] = regs[5] / 10.0
+                        self.data["fuel"]["temperature"] = regs[6]
+
+                        self.data["cooling"]["temperature"] = regs[7]
+                        self.data["cooling"]["pressure"] = regs[8] / 10.0
+
+                        self.data["electrical"]["battery_voltage"] = regs[9] / 10.0
+
+                        self.data["navigation"]["rudder_angle"] = regs[10] - 50  # Remove offset
+                        self.data["navigation"]["water_depth"] = regs[11]
+
                         self.data["last_update"] = time.time()
 
                 time.sleep(1)
