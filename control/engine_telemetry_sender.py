@@ -1,6 +1,7 @@
 """
 Engine Telemetry Sender
-Signed int16 복원 포함
+Field Zone sensor data → Bridge Zone via UDP
+Reads real sensor data from PLC registers 10-21
 """
 
 from pymodbus.client.sync import ModbusTcpClient
@@ -11,10 +12,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
-
-def decode_int16(v: int) -> int:
-    """uint16 → signed int16"""
-    return v - 0x10000 if v >= 0x8000 else v
 
 class EngineTelemetrySender:
     def __init__(self, plc_host="localhost", plc_port=502,
@@ -34,12 +31,33 @@ class EngineTelemetrySender:
 
         try:
             while True:
-                r = self.client.read_holding_registers(0, 3)
+                # Read Field Zone sensor data from registers 10-21 (12 registers)
+                r = self.client.read_holding_registers(10, 12)
                 if not r.isError():
+                    regs = r.registers
                     data = {
-                        "rpm": r.registers[0],
-                        "ballast": r.registers[1] / 10.0,
-                        "pump": decode_int16(r.registers[2]),
+                        "engine": {
+                            "rpm": regs[0],
+                            "temperature": regs[1],
+                            "oil_pressure": regs[2] / 10.0,
+                            "load": regs[3]
+                        },
+                        "fuel": {
+                            "level": regs[4],
+                            "consumption_rate": regs[5] / 10.0,
+                            "temperature": regs[6]
+                        },
+                        "cooling": {
+                            "temperature": regs[7],
+                            "pressure": regs[8] / 10.0
+                        },
+                        "electrical": {
+                            "battery_voltage": regs[9] / 10.0
+                        },
+                        "navigation": {
+                            "rudder_angle": regs[10] - 50,  # Remove offset
+                            "water_depth": regs[11]
+                        },
                         "timestamp": time.time()
                     }
 
@@ -50,9 +68,10 @@ class EngineTelemetrySender:
 
                     log.info(
                         f"[Telemetry] → Bridge: "
-                        f"RPM={data['rpm']}, "
-                        f"Ballast={data['ballast']:.1f}, "
-                        f"Pump={data['pump']}"
+                        f"RPM={data['engine']['rpm']}, "
+                        f"Temp={data['engine']['temperature']}°C, "
+                        f"Oil={data['engine']['oil_pressure']:.1f}bar, "
+                        f"Fuel={data['fuel']['level']}%"
                     )
 
                 time.sleep(interval)

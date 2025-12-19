@@ -1,6 +1,19 @@
 """
+⚠️  DEPRECATED - DO NOT USE WITH REAL SENSORS ⚠️
+
+This file generates FAKE/SIMULATED data for testing purposes only.
+When using real Field Zone sensors (sensor_sim.py), DO NOT run this file!
+
 Engine Logic Controller
-Decision & Physics Layer
+Decision & Physics Layer (SIMULATOR)
+
+This script generates simulated engine data:
+- RPM: Fixed pattern (800 → 1000 → 1200 → 900)
+- Ballast: Random (40.0 ~ 50.0, ±3.0 change per cycle)
+- Pump Mode: Logical decision based on ballast
+
+⚠️  If real sensor data is available, use sensor_to_plc.py instead!
+⚠️  Running this will OVERWRITE real sensor data in PLC registers 0-2!
 
 Ballast:
 - Range: 40.0 ~ 50.0
