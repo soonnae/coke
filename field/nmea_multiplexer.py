@@ -130,6 +130,8 @@ class NMEAMultiplexer:
                     fields.extend(['A', str(nav['rudder_angle']), 'D', 'Rudder'])
                 if 'water_depth' in nav:
                     fields.extend(['G', str(nav['water_depth']), 'M', 'Depth'])
+                if 'speed' in nav:
+                    fields.extend(['G', str(nav['speed']), 'N', 'Speed'])
 
                 if fields:
                     body = 'GPXDR,' + ','.join(fields)
