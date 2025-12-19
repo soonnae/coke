@@ -1,19 +1,16 @@
 """
-Engine Logic Controller
-Decision & Physics Layer
+Control Zone Logic - Ballast & Pump Controller
+Generates control decisions based on logic
 
-Ballast:
-- Range: 40.0 ~ 50.0
-- One decimal
-- Next value ∈ [prev-3.0, prev+3.0] ∩ [40,50]
+This script controls:
+- Ballast: Random simulation (40.0 ~ 50.0, ±3.0 change per cycle)
+- Pump Mode: Logical decision based on ballast level
 
-Pump Mode (logical):
-  +1 = FILL
-   0 = HOLD
-  -1 = DRAIN
+Writes to PLC registers:
+- HR[1]: Ballast x10
+- HR[2]: Pump Mode (uint16 encoded)
 
-Pump Mode (PLC stored):
-  uint16 (encode before write)
+Note: Sensor data (RPM, temperature, etc.) comes from Field Zone via HR[10-21]
 """
 
 from pymodbus.client.sync import ModbusTcpClient
@@ -33,27 +30,27 @@ def encode_uint16(v: int) -> int:
     """signed int → uint16 for Modbus write"""
     return v & 0xFFFF
 
-class EngineLogic:
+class ControlLogic:
     def __init__(self, plc_host="localhost", plc_port=502):
         self.client = ModbusTcpClient(plc_host, port=plc_port)
         self.ballast = 45.0
-        self.rpm_pattern = [800, 1000, 1200, 900]
-        self.rpm_idx = 0
 
     def connect(self):
         if self.client.connect():
-            log.info("[EngineLogic] Connected to PLC")
+            log.info("[ControlLogic] Connected to PLC")
             return True
-        log.error("[EngineLogic] PLC connection failed")
+        log.error("[ControlLogic] PLC connection failed")
         return False
 
     def update_ballast(self):
+        """Update ballast with random walk within constraints"""
         prev = self.ballast
         low = max(BALLAST_MIN, prev - DELTA_LIMIT)
         high = min(BALLAST_MAX, prev + DELTA_LIMIT)
         self.ballast = round(random.uniform(low, high), 1)
 
     def decide_pump_mode(self) -> int:
+        """Decide pump mode based on ballast level"""
         if self.ballast <= BALLAST_MIN:
             return 1      # FILL
         elif self.ballast >= BALLAST_MAX:
@@ -64,32 +61,30 @@ class EngineLogic:
         if not self.connect():
             return
 
+        log.info("[ControlLogic] Starting Ballast & Pump control loop")
+
         try:
             while True:
-                rpm = self.rpm_pattern[self.rpm_idx]
-                self.rpm_idx = (self.rpm_idx + 1) % len(self.rpm_pattern)
-
                 prev_ballast = self.ballast
                 self.update_ballast()
                 pump_mode = self.decide_pump_mode()
 
-                # 🔑 WRITE (encode signed → uint16)
-                self.client.write_register(0, rpm)
+                # Write control decisions to PLC
                 self.client.write_register(1, int(self.ballast * 10))
                 self.client.write_register(2, encode_uint16(pump_mode))
 
                 log.info(
-                    f"[EngineLogic] RPM={rpm}, "
-                    f"Ballast={prev_ballast:.1f}→{self.ballast:.1f}, "
-                    f"PumpMode={pump_mode}"
+                    f"[ControlLogic] Ballast={prev_ballast:.1f}→{self.ballast:.1f}, "
+                    f"PumpMode={pump_mode} "
+                    f"({'FILL' if pump_mode == 1 else 'DRAIN' if pump_mode == -1 else 'HOLD'})"
                 )
 
                 time.sleep(INTERVAL)
 
         except KeyboardInterrupt:
-            log.info("[EngineLogic] Shutdown")
+            log.info("[ControlLogic] Shutdown")
         finally:
             self.client.close()
 
 if __name__ == "__main__":
-    EngineLogic().run()
+    ControlLogic().run()

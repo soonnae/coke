@@ -1,7 +1,8 @@
 """
 HMI Bridge
 PLC → REST API
-Signed int16 복원 + Ballast 스케일 복원
+Reads Field Zone sensor data and Control Zone control data from PLC
+Exposes combined data via REST API
 """
 
 from pymodbus.client.sync import ModbusTcpClient
@@ -15,15 +16,41 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 def decode_int16(v: int) -> int:
+    """uint16 → signed int16"""
     return v - 0x10000 if v >= 0x8000 else v
 
 class PLCCache:
     def __init__(self, host="localhost", port=502):
         self.client = ModbusTcpClient(host, port=port)
         self.data = {
-            "rpm": 0,
-            "ballast": 0.0,
-            "pump_status": 0,
+            # Field Zone sensor data (registers 10-21)
+            "engine": {
+                "rpm": 0,
+                "temperature": 0,
+                "oil_pressure": 0.0,
+                "load": 0
+            },
+            "fuel": {
+                "level": 0,
+                "consumption_rate": 0.0,
+                "temperature": 0
+            },
+            "cooling": {
+                "temperature": 0,
+                "pressure": 0.0
+            },
+            "electrical": {
+                "battery_voltage": 0.0
+            },
+            "navigation": {
+                "rudder_angle": 0,
+                "water_depth": 0
+            },
+            # Control Zone control data (registers 1-2)
+            "control": {
+                "ballast": 0.0,
+                "pump_mode": 0
+            },
             "connected": False,
             "last_update": 0
         }
@@ -43,12 +70,37 @@ class PLCCache:
                         time.sleep(3)
                         continue
 
-                r = self.client.read_holding_registers(0, 3)
-                if not r.isError():
+                # Read control data registers (1-2)
+                r_control = self.client.read_holding_registers(1, 2)
+
+                # Read sensor data registers (10-21, total 12 registers)
+                r_sensors = self.client.read_holding_registers(10, 12)
+
+                if not r_control.isError() and not r_sensors.isError():
                     with self.lock:
-                        self.data["rpm"] = r.registers[0]
-                        self.data["ballast"] = r.registers[1] / 10.0
-                        self.data["pump_status"] = decode_int16(r.registers[2])
+                        # Control Zone control data
+                        self.data["control"]["ballast"] = r_control.registers[0] / 10.0
+                        self.data["control"]["pump_mode"] = decode_int16(r_control.registers[1])
+
+                        # Field Zone sensor data
+                        regs = r_sensors.registers
+                        self.data["engine"]["rpm"] = regs[0]
+                        self.data["engine"]["temperature"] = regs[1]
+                        self.data["engine"]["oil_pressure"] = regs[2] / 10.0
+                        self.data["engine"]["load"] = regs[3]
+
+                        self.data["fuel"]["level"] = regs[4]
+                        self.data["fuel"]["consumption_rate"] = regs[5] / 10.0
+                        self.data["fuel"]["temperature"] = regs[6]
+
+                        self.data["cooling"]["temperature"] = regs[7]
+                        self.data["cooling"]["pressure"] = regs[8] / 10.0
+
+                        self.data["electrical"]["battery_voltage"] = regs[9] / 10.0
+
+                        self.data["navigation"]["rudder_angle"] = regs[10] - 50  # Remove offset
+                        self.data["navigation"]["water_depth"] = regs[11]
+
                         self.data["last_update"] = time.time()
 
                 time.sleep(1)
