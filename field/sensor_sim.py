@@ -9,7 +9,7 @@ import socket
 import json
 from datetime import datetime
 
-TARGET_IP = "10.10.20.10"
+TARGET_IP = "10.10.40.10"
 TARGET_PORT = 10112
 
 # Multiplexer 설정 (Bridge Zone용 NMEA 변환)
@@ -206,8 +206,8 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Ship Sensor Simulator')
-    parser.add_argument('--target-ip', default="10.10.20.10",
-                        help='Target IP address (default: 10.10.20.10)')
+    parser.add_argument('--target-ip', default="10.10.40.10",
+                        help='Target IP address (default: 10.10.40.10)')
     parser.add_argument('--target-port', type=int, default=10112,
                         help='Target port (default: 10112)')
 
