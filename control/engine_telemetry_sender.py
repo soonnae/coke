@@ -80,10 +80,13 @@ class EngineTelemetrySender:
 
                     log.info(
                         f"[Telemetry] → Bridge: "
-                        f"RPM={data['engine']['rpm']}, "
-                        f"Temp={data['engine']['temperature']}°C, "
-                        f"Ballast={data['control']['ballast']:.1f}, "
-                        f"Pump={data['control']['pump_mode']}"
+                        f"Engine(RPM={data['engine']['rpm']}, Temp={data['engine']['temperature']}°C, "
+                        f"Oil={data['engine']['oil_pressure']:.1f}bar, Load={data['engine']['load']}%), "
+                        f"Fuel(Level={data['fuel']['level']}%, Flow={data['fuel']['consumption_rate']:.1f}L/h, Temp={data['fuel']['temperature']}°C), "
+                        f"Cooling(Temp={data['cooling']['temperature']}°C, Press={data['cooling']['pressure']:.1f}bar), "
+                        f"Elec(Batt={data['electrical']['battery_voltage']:.1f}V), "
+                        f"Nav(Rudder={data['navigation']['rudder_angle']}°, Depth={data['navigation']['water_depth']}m), "
+                        f"Control(Ballast={data['control']['ballast']:.1f}, Pump={data['control']['pump_mode']})"
                     )
 
                 time.sleep(interval)

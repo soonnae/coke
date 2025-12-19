@@ -150,15 +150,28 @@ class SensorToPLC:
 
             self.stats['written'] += written_count
 
-            # 로그 출력 (주요 값만)
+            # 로그 출력 (모든 값)
             log.info(
                 f"[Sensor→PLC] Engine: RPM={data.get('engine_rpm', 'N/A')}, "
                 f"Temp={data.get('engine_temp', 'N/A')}°C, "
-                f"Oil={data.get('oil_pressure', 'N/A')/10:.1f}bar"
+                f"Oil={data.get('oil_pressure', 'N/A')/10:.1f}bar, "
+                f"Load={data.get('engine_load', 'N/A')}%"
             )
             log.info(
                 f"[Sensor→PLC] Fuel: Level={data.get('fuel_level', 'N/A')}%, "
-                f"Flow={data.get('fuel_consumption', 'N/A')/10:.1f}L/h"
+                f"Flow={data.get('fuel_consumption', 'N/A')/10:.1f}L/h, "
+                f"Temp={data.get('fuel_temp', 'N/A')}°C"
+            )
+            log.info(
+                f"[Sensor→PLC] Cooling: Temp={data.get('coolant_temp', 'N/A')}°C, "
+                f"Pressure={data.get('coolant_pressure', 'N/A')/10:.1f}bar"
+            )
+            log.info(
+                f"[Sensor→PLC] Electrical: Battery={data.get('battery_voltage', 'N/A')/10:.1f}V"
+            )
+            log.info(
+                f"[Sensor→PLC] Navigation: Rudder={data.get('rudder_angle', 'N/A')-50}°, "
+                f"Depth={data.get('water_depth', 'N/A')}m"
             )
 
             return True
