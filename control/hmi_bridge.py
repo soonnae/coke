@@ -1,7 +1,8 @@
 """
 HMI Bridge
 PLC → REST API
-Reads Field Zone sensor data from PLC and exposes via REST API
+Reads Field Zone sensor data and Control Zone control data from PLC
+Exposes combined data via REST API
 """
 
 from pymodbus.client.sync import ModbusTcpClient
@@ -13,6 +14,10 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+
+def decode_int16(v: int) -> int:
+    """uint16 → signed int16"""
+    return v - 0x10000 if v >= 0x8000 else v
 
 class PLCCache:
     def __init__(self, host="localhost", port=502):
@@ -41,6 +46,11 @@ class PLCCache:
                 "rudder_angle": 0,
                 "water_depth": 0
             },
+            # Control Zone control data (registers 1-2)
+            "control": {
+                "ballast": 0.0,
+                "pump_mode": 0
+            },
             "connected": False,
             "last_update": 0
         }
@@ -60,11 +70,18 @@ class PLCCache:
                         time.sleep(3)
                         continue
 
+                # Read control data registers (1-2)
+                r_control = self.client.read_holding_registers(1, 2)
+
                 # Read sensor data registers (10-21, total 12 registers)
                 r_sensors = self.client.read_holding_registers(10, 12)
 
-                if not r_sensors.isError():
+                if not r_control.isError() and not r_sensors.isError():
                     with self.lock:
+                        # Control Zone control data
+                        self.data["control"]["ballast"] = r_control.registers[0] / 10.0
+                        self.data["control"]["pump_mode"] = decode_int16(r_control.registers[1])
+
                         # Field Zone sensor data
                         regs = r_sensors.registers
                         self.data["engine"]["rpm"] = regs[0]

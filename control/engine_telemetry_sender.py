@@ -1,7 +1,7 @@
 """
 Engine Telemetry Sender
-Field Zone sensor data → Bridge Zone via UDP
-Reads real sensor data from PLC registers 10-21
+Field Zone sensor data + Control Zone control data → Bridge Zone via UDP
+Reads sensor data from PLC registers 10-21 and control data from registers 1-2
 """
 
 from pymodbus.client.sync import ModbusTcpClient
@@ -12,6 +12,10 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+
+def decode_int16(v: int) -> int:
+    """uint16 → signed int16"""
+    return v - 0x10000 if v >= 0x8000 else v
 
 class EngineTelemetrySender:
     def __init__(self, plc_host="localhost", plc_port=502,
@@ -31,10 +35,14 @@ class EngineTelemetrySender:
 
         try:
             while True:
+                # Read Control Zone control data from registers 1-2
+                r_control = self.client.read_holding_registers(1, 2)
+
                 # Read Field Zone sensor data from registers 10-21 (12 registers)
-                r = self.client.read_holding_registers(10, 12)
-                if not r.isError():
-                    regs = r.registers
+                r_sensors = self.client.read_holding_registers(10, 12)
+
+                if not r_control.isError() and not r_sensors.isError():
+                    regs = r_sensors.registers
                     data = {
                         "engine": {
                             "rpm": regs[0],
@@ -58,6 +66,10 @@ class EngineTelemetrySender:
                             "rudder_angle": regs[10] - 50,  # Remove offset
                             "water_depth": regs[11]
                         },
+                        "control": {
+                            "ballast": r_control.registers[0] / 10.0,
+                            "pump_mode": decode_int16(r_control.registers[1])
+                        },
                         "timestamp": time.time()
                     }
 
@@ -70,8 +82,8 @@ class EngineTelemetrySender:
                         f"[Telemetry] → Bridge: "
                         f"RPM={data['engine']['rpm']}, "
                         f"Temp={data['engine']['temperature']}°C, "
-                        f"Oil={data['engine']['oil_pressure']:.1f}bar, "
-                        f"Fuel={data['fuel']['level']}%"
+                        f"Ballast={data['control']['ballast']:.1f}, "
+                        f"Pump={data['control']['pump_mode']}"
                     )
 
                 time.sleep(interval)
