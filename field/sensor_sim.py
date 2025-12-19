@@ -54,7 +54,11 @@ class SensorSimulator:
                 # Control Zone PLC로 전송
                 self.sock.sendto(message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
 
-                print(f"[SENT] Engine: {sensor_data['engine']['rpm']:.0f}RPM, {sensor_data['engine']['temperature']:.1f}°C | Fuel: {sensor_data['fuel']['level']:.1f}%")
+                print(f"[SENT] Engine: RPM={sensor_data['engine']['rpm']:.0f}, Temp={sensor_data['engine']['temperature']:.1f}°C, Oil={sensor_data['engine']['oil_pressure']:.2f}bar, Load={sensor_data['engine']['load']:.1f}%")
+                print(f"       Fuel: Level={sensor_data['fuel']['level']:.1f}%, Flow={sensor_data['fuel']['consumption_rate']:.2f}L/h, Temp={sensor_data['fuel']['temperature']:.1f}°C")
+                print(f"       Cooling: Temp={sensor_data['cooling']['temperature']:.1f}°C, Pressure={sensor_data['cooling']['pressure']:.2f}bar")
+                print(f"       Electrical: Battery={sensor_data['electrical']['battery_voltage']:.2f}V")
+                print(f"       Navigation: Rudder={sensor_data['navigation']['rudder_angle']:.1f}°, Depth={sensor_data['navigation']['water_depth']:.1f}m")
 
                 # 센서 값 업데이트
                 self.update_sensors()
