@@ -9,12 +9,8 @@ import socket
 import json
 from datetime import datetime
 
-TARGET_IP = "10.10.20.10"
+TARGET_IP = "10.10.20.10"  # Control Zone PLC
 TARGET_PORT = 10112
-
-# Multiplexer 설정 (Bridge Zone용 NMEA 변환)
-MULTIPLEXER_IP = "127.0.0.1"
-MULTIPLEXER_PORT = 10113
 
 class SensorSimulator:
     def __init__(self):
@@ -45,9 +41,7 @@ class SensorSimulator:
         
     def start(self):
         """센서 시뮬레이터 시작"""
-        print(f"[Sensor Simulator] Sending to:")
-        print(f"  - Control Zone: {TARGET_IP}:{TARGET_PORT}")
-        print(f"  - Multiplexer: {MULTIPLEXER_IP}:{MULTIPLEXER_PORT}")
+        print(f"[Sensor Simulator] Sending to Control Zone PLC: {TARGET_IP}:{TARGET_PORT}")
 
         while True:
             try:
@@ -57,11 +51,8 @@ class SensorSimulator:
                 # JSON 형식으로 전송
                 message = json.dumps(sensor_data)
 
-                # 1) Control Zone으로 전송
+                # Control Zone PLC로 전송
                 self.sock.sendto(message.encode('utf-8'), (TARGET_IP, TARGET_PORT))
-
-                # 2) Multiplexer로 전송 (Bridge Zone NMEA 변환용)
-                self.sock.sendto(message.encode('utf-8'), (MULTIPLEXER_IP, MULTIPLEXER_PORT))
 
                 print(f"[SENT] Engine: {sensor_data['engine']['rpm']:.0f}RPM, {sensor_data['engine']['temperature']:.1f}°C | Fuel: {sensor_data['fuel']['level']:.1f}%")
 
