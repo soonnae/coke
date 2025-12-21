@@ -1,0 +1,206 @@
+# =========================================
+# Playbook Configuration (Improved)
+# - Escalation / Trust-based response
+# - OT-friendly mitigations (soft response first)
+# - View protection for HMI (S3_2) and UI integrity (S4)
+# =========================================
+
+suricata:
+  eve_path: "/var/log/suricata/eve.json"
+
+routeros:
+  host: "10.10.20.1"
+  user: "admin"
+  ssh_key: "/home/integration/.ssh/id_rsa"
+
+  # 기존 차단 리스트(전체 IP 차단용)
+  address_list: "blocked_attackers"
+
+hmi:
+  # 대시보드 없어도 Node-RED(또는 수신 서버) debug/log로 “대응 증거” 남기기 위해 true 권장
+  enabled: false
+  url: "http://10.10.10.10:1880/alert"
+
+# (선택) HMI 제어/상태 엔드포인트 (없어도 notify로만 남기게 코드에서 처리 가능)
+# - read_only / require_ack / invalidate_session 같은 제어 endpoint를 Node-RED로 간단히 구성 가능
+hmi_control_url: "http://10.10.10.10:1880/hmi_control"
+
+# (선택) 신뢰도/무효화 제어 엔드포인트(제어로직이 참조하도록 “개념 구현”)
+# - 없으면 notify 로그만 남김
+trust_control_url: ""
+
+playbook:
+  # 플레이북 실행 로그(JSONL)
+  log_path: "/var/log/playbook/playbook.jsonl"
+
+  # ----------------------------
+  # Suricata 룰 SID 트리거
+  # ----------------------------
+  nmea_spoofing_sids: [1000010]
+  modbus_write_attack_sids: [2000020]
+  sensor_replay_sids: []     # (있으면 채우기) Suricata로 센서 리플레이를 직접 탐지한다면 SID 추가
+
+  # ----------------------------
+  # Allowlist(완전 면제 대상)
+  # - Field(10.10.20.10)는 공격이 “정상 소스처럼 보이게” 나올 수 있어서 benign에서 빼는 것을 권장
+  # ----------------------------
+  benign_sources:
+    - "10.10.10.10"   # Bridge HMI(Node-RED)
+    - "10.10.40.10"   # Control Zone
+
+  # 전역 쿨다운
+  block_cooldown_sec: 120
+  notify_cooldown_sec: 30
+
+  # ============================================================
+  # S1. NMEA Spoofing (항법 데이터 변조)
+  # - 1회 탐지: 알림
+  # - 지속 탐지(윈도우 내 임계치): IP 차단
+  # - 교차검증 기반 severity(suspect/critical) + OT 친화 soft 대응(신뢰도 저하/무효화)
+  # ============================================================
+  s1_nmea_spoofing:
+    escalation_window_sec: 5
+    escalation_threshold: 3
+    block_timeout_sec: 180
+
+  # (선택) 교차 검증용 상태 API (없으면 unknown 처리)
+  # - Node-RED에서 /nav/gps_state, /nav/ais_state 같이 JSON 반환하도록 만들어도 됨
+  # - 예시: { "anomaly": true, "reason": "..." }
+  s1_nav_check:
+    gps_url: ""   # 예: "http://10.10.10.10:1880/nav/gps_state"
+    ais_url: ""   # 예: "http://10.10.10.10:1880/nav/ais_state"
+
+  # ============================================================
+  # S2. Modbus Write / Flood 완화
+  # - write-only containment(개념): read 유지 + write 차단(가능하면)
+  # - 빈도 기반 escalation: suspect → 정책 적용, 심하면 block
+  # - safe mode(개념): 옵션으로 POST
+  # ============================================================
+  modbus_mitigation:
+    enabled: true
+
+    ip_block_duration_sec: 180
+
+    # 기존 옵션 유지(실험에서 “502만 다룬다”는 의미라면 유지 가능)
+    port502_only_mode: true
+
+    # 기본 rate-limit (suspect 정책과 결합해도 됨)
+    rate_limit_pps: 30
+    rate_limit_burst: 30
+    rate_limit_time: "1s"
+
+    # 빈도 기반 escalation
+    freq_window_sec: 5
+    suspect_threshold: 3
+    block_threshold: 8
+
+    # write-only 차단(설계 코드화 / best-effort)
+    enable_write_only_block: true
+
+    # PLC 대상
+    plc_ip: "10.10.40.10"
+    plc_port: 502
+
+    # suspect address-list
+    modbus_suspects_list: "modbus_suspects"
+
+  # (선택) Safe Mode 개념 엔드포인트 (없으면 notify만)
+  s2_safe_mode:
+    http_url: ""  # 예: "http://10.10.40.10:8080/api/safe_mode"
+
+  # ============================================================
+  # S3_1. Sensor Replay/Stale (UDP 10112)
+  # - 기본: soft 대응(데이터 invalid 마킹 + trust score)
+  # - 옵션: trust가 충분히 낮을 때만 차단
+  # ============================================================
+  s3_1_sensor_replay:
+    enabled: true
+    bind_ip: "0.0.0.0"
+    sensor_port: 10112
+
+    # ✅ 개선안 반영: 탐지 즉시 차단 X
+    block_on_detect: false
+
+    # (선택) trust 기반 차단(원하면 true)
+    block_on_low_trust: true
+    low_trust_threshold: 0.3
+
+    ip_block_duration_sec: 180
+
+    # soft 대응(무효화)
+    invalid_ttl_sec: 30
+
+    # trust score
+    trust_init: 1.0
+    trust_decay: 0.25
+    trust_recover: 0.02
+
+    # 탐지 파라미터
+    window_sec: 20
+    repeat_threshold: 10        # 동일 payload가 window 내 10회 이상이면 탐지
+    stale_ts_threshold_sec: 6   # timestamp가 6초 이상 증가 안 하면 탐지(추출 가능할 때만)
+    timestamp_fields: ["timestamp", "ts", "time"]
+
+    # (참고) 기존 호환 필드(코드에서 안 쓰면 무시됨)
+    notify_type: "S3_1_SENSOR_REPLAY_STALE"
+    reason_hint: "STALE_OR_REPLAY_PATTERN"
+
+  # ============================================================
+  # S3_2. PLC↔HMI Replay/Stale View (Loss of View)
+  # - View 보호: “Display may be stale” 배너
+  # - Read-only 강제 + Operator ACK 요구
+  # ============================================================
+  s3_2_plc_hmi_replay:
+    enabled: false
+    interval_sec: 2
+    duration_sec: 6
+
+    # Truth(PLC) / View(HMI) 소스: 둘 다 JSON으로 동일 키를 제공한다고 가정
+    plc_http_url: "http://10.10.40.10:8080/plc_state"
+    hmi_http_url: "http://10.10.10.10:1880/hmi_state"
+
+    # stale 판단용 키 (HMI가 이 키를 duration_sec 이상 갱신 안 하면 stale)
+    stale_key: "rpm"
+
+    # PLC 값은 변하는데 HMI 값은 안 변하는지(리플레이)까지 보려면 true
+    require_plc_change: true
+
+    # 대응 옵션
+    readonly_on_detect: true
+    ack_on_detect: true
+    banner_ttl_sec: 15
+
+    # (참고) 기존 호환 필드(코드에서 안 쓰면 무시됨)
+    notify_type: "S3_2_PLC_HMI_REPLAY_STALE"
+    reason_hint: "HMI_VIEW_STALE_OR_REPLAY"
+
+  # ============================================================
+  # S4. HMI Tamper
+  # - PLC truth vs HMI view 불일치 지속 시 tamper
+  # - UI 무결성(해시) 시그널(보조증거)
+  # - 세션 무효화(개념) + Read-only 전환
+  # ============================================================
+  s4_hmi_tamper:
+    enabled: false
+    interval_sec: 2
+    duration_sec: 6
+
+    plc_http_url: "http://10.10.40.10:8080/plc_state"
+    hmi_http_url: "http://10.10.10.10:1880/hmi_state"
+
+    thresholds:
+      rpm: 50
+      temperature: 5
+      oil_pressure: 0.5
+
+    # UI integrity(해시) 보호(데모/설계 표현)
+    enable_ui_hash: true
+    hash_keys: []   # 비우면 전체 HMI JSON을 해시. 특정 키만 보고 싶으면 ["rpm","temperature"] 등
+
+    # 대응 옵션
+    readonly_on_detect: true
+    invalidate_session_on_detect: true
+    banner_ttl_sec: 20
+
+    # (참고) 기존 호환 필드
+    notify_type: "S4_HMI_TAMPER_DETECTED"
