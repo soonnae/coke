@@ -49,6 +49,7 @@
 10. **modbus_attacker.py** - Modbus PLC 공격 시뮬레이터
     - PLC에 대한 다양한 공격 패턴 시뮬레이션
     - 4가지 공격 모드: force_fill, force_drain, oscillate, stealthy
+    - RPM, Ballast, PumpMode 변조 (Node-RED에 즉시 반영)
     - 교육 및 테스트 목적 전용
 
 ## 필요한 Python 패키지
@@ -255,7 +256,18 @@ python modbus_attacker.py --plc-ip 10.10.40.10 --plc-port 502 --mode stealthy
 [INFO]
 [INFO] [Attacker] Attack finished
 [INFO]     Elapsed: 60.2s
-[INFO]     Writes attempted: 120
-[INFO]     Writes successful: 120
+[INFO]     Writes attempted: 240
+[INFO]     Writes successful: 240
 [INFO]     Success rate: 100.0%
 ```
+
+### Node-RED에서 관찰되는 변화
+
+공격이 성공하면 Node-RED 대시보드에서:
+
+- **RPM**: 0~3000 사이 무작위 값으로 계속 변화
+- **Ballast**: oscillate 모드 시 40.0 ↔ 50.0 빠르게 왔다갔다
+- **PumpMode**: FILL(1) ↔ DRAIN(-1) 계속 반복
+- **그래프**: 지그재그 패턴 (정상은 완만한 곡선)
+
+**주의**: engine_logic.py가 실행 중이면 공격 효과가 반감될 수 있으니 중지 권장
