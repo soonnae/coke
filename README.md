@@ -54,14 +54,19 @@
 ## 필요한 Python 패키지
 
 ```bash
-# pymodbus 2.5.3 사용 (안정적인 버전)
+# pymodbus 2.5.3 사용 (안정적인 버전, 권장)
 pip install pymodbus==2.5.3
+
+# 또는 pymodbus 3.x (modbus_attacker.py는 3.x도 지원)
+pip install pymodbus
 
 # 추가 패키지
 pip install prometheus-client
 ```
 
-**중요**: 이 프로젝트는 **pymodbus 2.5.3**을 사용합니다. 3.x는 API가 자주 바뀌어 호환성 문제가 있으니 2.5.3 사용을 권장합니다!
+**중요**:
+- **Control Zone 스크립트들**: pymodbus 2.5.3 사용 (안정적)
+- **modbus_attacker.py**: pymodbus 2.5.3 및 3.x 모두 지원
 
 ## 실행 방법
 

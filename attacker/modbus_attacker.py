@@ -10,7 +10,7 @@ This script demonstrates various attack patterns on the PLC:
 - stealthy: Random values within normal range with mismatched pump modes
 """
 
-from pymodbus.client.sync import ModbusTcpClient
+from pymodbus.client import ModbusTcpClient
 import time
 import random
 import logging
