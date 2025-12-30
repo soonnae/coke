@@ -45,17 +45,29 @@
    - UDP → Modbus 변환
    - 센서 값을 PLC 레지스터에 매핑
 
+### Attacker - 1개
+10. **modbus_attacker.py** - Modbus PLC 공격 시뮬레이터
+    - PLC에 대한 다양한 공격 패턴 시뮬레이션
+    - 4가지 공격 모드: force_fill, force_drain, oscillate, stealthy
+    - RPM, Ballast, PumpMode 변조 (Node-RED에 즉시 반영)
+    - 교육 및 테스트 목적 전용
+
 ## 필요한 Python 패키지
 
 ```bash
-# pymodbus 2.5.3 사용 (안정적인 버전)
+# pymodbus 2.5.3 사용 (안정적인 버전, 권장)
 pip install pymodbus==2.5.3
+
+# 또는 pymodbus 3.x (modbus_attacker.py는 3.x도 지원)
+pip install pymodbus
 
 # 추가 패키지
 pip install prometheus-client
 ```
 
-**중요**: 이 프로젝트는 **pymodbus 2.5.3**을 사용합니다. 3.x는 API가 자주 바뀌어 호환성 문제가 있으니 2.5.3 사용을 권장합니다!
+**중요**:
+- **Control Zone 스크립트들**: pymodbus 2.5.3 사용 (안정적)
+- **modbus_attacker.py**: pymodbus 2.5.3 및 3.x 모두 지원
 
 ## 실행 방법
 
@@ -129,6 +141,9 @@ coke/
 │   ├── hmi_bridge.py
 │   └── sensor_to_plc.py
 │
+├── attacker/                       # Attack Scripts
+│   └── modbus_attacker.py
+│
 └── README.md
 ```
 
@@ -176,3 +191,83 @@ curl -X POST http://localhost:8080/api/plc/write_coil \
   -H "Content-Type: application/json" \
   -d '{"address": 0, "value": true}'
 ```
+
+## Attacker 사용법
+
+### Modbus PLC Attacker
+
+PLC에 대한 다양한 공격 패턴을 시뮬레이션합니다.
+
+```bash
+cd attacker
+
+# 기본 사용 (oscillate 모드, 60초)
+python modbus_attacker.py --plc-ip localhost
+
+# force_fill 모드로 30초 공격
+python modbus_attacker.py --plc-ip localhost --mode force_fill --duration 30
+
+# 빠른 공격 (0.5초 간격)
+python modbus_attacker.py --plc-ip localhost --mode oscillate --interval 0.5
+
+# 원격 PLC 공격
+python modbus_attacker.py --plc-ip 10.10.40.10 --plc-port 502 --mode stealthy
+```
+
+### 공격 모드 설명
+
+1. **force_fill**: Ballast를 40.0 근처로 고정 + FILL 모드 강제
+   - 목적: 지속적인 물 주입 유도
+   - 효과: 시스템이 계속 채우려고 시도
+
+2. **force_drain**: Ballast를 50.0 근처로 고정 + DRAIN 모드 강제
+   - 목적: 지속적인 물 배출 유도
+   - 효과: 시스템이 계속 비우려고 시도
+
+3. **oscillate** (권장): 40.0(FILL) ↔ 50.0(DRAIN) 빠르게 교체
+   - 목적: 펌프 시스템 혼란 유발
+   - 효과: 가장 눈에 띄는 비정상 동작
+
+4. **stealthy**: 정상 범위(40~50) 내에서 무작위 값 + 무작위 펌프 모드
+   - 목적: 탐지 회피하면서 시스템 교란
+   - 효과: 정상처럼 보이지만 잘못된 제어 신호
+
+### 옵션
+
+- `--plc-ip`: PLC IP 주소 (기본: localhost)
+- `--plc-port`: PLC Modbus 포트 (기본: 502)
+- `--mode`: 공격 모드 (force_fill, force_drain, oscillate, stealthy)
+- `--interval`: 쓰기 간격 (초, 기본: 1.5)
+- `--duration`: 공격 지속 시간 (초, 기본: 60)
+
+### 예상 출력
+
+```
+[INFO] [Attacker] Connected to PLC at localhost:502
+[INFO] [Attacker] Starting Modbus Write Storm
+[INFO]     Mode: oscillate
+[INFO]     Interval: 1.5s
+[INFO]     Duration: 60s
+[INFO]
+[INFO] [ATTACK] RPM=1234, Ballast=40.1, PumpMode=FILL(+1) (u16=1)
+[INFO] [ATTACK] RPM=2567, Ballast=40.0, PumpMode=FILL(+1) (u16=1)
+[INFO] [ATTACK] RPM=890,  Ballast=49.9, PumpMode=DRAIN(-1) (u16=65535)
+...
+[INFO]
+[INFO] [Attacker] Attack finished
+[INFO]     Elapsed: 60.2s
+[INFO]     Writes attempted: 240
+[INFO]     Writes successful: 240
+[INFO]     Success rate: 100.0%
+```
+
+### Node-RED에서 관찰되는 변화
+
+공격이 성공하면 Node-RED 대시보드에서:
+
+- **RPM**: 0~3000 사이 무작위 값으로 계속 변화
+- **Ballast**: oscillate 모드 시 40.0 ↔ 50.0 빠르게 왔다갔다
+- **PumpMode**: FILL(1) ↔ DRAIN(-1) 계속 반복
+- **그래프**: 지그재그 패턴 (정상은 완만한 곡선)
+
+**주의**: engine_logic.py가 실행 중이면 공격 효과가 반감될 수 있으니 중지 권장
